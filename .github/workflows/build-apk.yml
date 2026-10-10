@@ -50,6 +50,16 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Install app icons
+        run: |
+          rm -rf android/app/src/main/res/mipmap-anydpi-v26
+          for d in mdpi hdpi xhdpi xxhdpi xxxhdpi; do
+            mkdir -p "android/app/src/main/res/mipmap-$d"
+            base64 -d "assets/icon/mipmap-$d/ic_launcher.png.b64" > "android/app/src/main/res/mipmap-$d/ic_launcher.png"
+            base64 -d "assets/icon/mipmap-$d/ic_launcher_round.png" > "android/app/src/main/res/mipmap-$d/ic_launcher_round.png"
+          done
+          ls android/app/src/main/res/mipmap-xxxhdpi/
+
       - name: Prepare signing keystore
         run: base64 -d debug.keystore.b64 > "$GITHUB_WORKSPACE/debug.keystore"
 
