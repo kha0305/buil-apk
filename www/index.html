@@ -1,0 +1,1170 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>Nhật ký xe</title>
+<style>
+/* Nhật ký xe - giao diện offline, system font */
+:root{
+  --accent:#f97316; --accent-dark:#ea580c; --accent-soft:#fff3e8;
+  --bg:#f4f5f7; --card:#ffffff; --text:#1f2937; --muted:#6b7280;
+  --border:#e5e7eb; --danger:#dc2626; --ok:#15803d; --warn:#b45309;
+  --radius:12px;
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  background:var(--bg); color:var(--text); font-size:15px; line-height:1.5;
+}
+.app{max-width:720px;margin:0 auto;padding:0 12px 48px;}
+header.top{background:var(--accent);color:#fff;padding:18px 16px 16px;margin:0 -12px 14px;}
+header.top h1{margin:0;font-size:21px;font-weight:700;}
+header.top p{margin:4px 0 0;font-size:13px;opacity:.92;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:14px;margin:0 0 12px;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+.card h2{margin:0 0 10px;font-size:16px;font-weight:700;}
+.card h3{margin:14px 0 8px;font-size:14px;}
+label{display:block;font-size:13px;font-weight:600;margin:10px 0 4px;color:var(--text);}
+input[type=text],input[type=number],input[type=date],select,textarea{
+  width:100%;padding:11px 10px;font-size:15px;border:1px solid var(--border);
+  border-radius:8px;background:#fff;color:var(--text);font-family:inherit;min-height:44px;
+}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);border-color:var(--accent);}
+.row{display:flex;gap:8px;align-items:center;}
+.row>*{flex:1;}
+.row .narrow{flex:0 0 auto;}
+button,.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  min-height:44px;padding:10px 16px;font-size:15px;font-weight:600;font-family:inherit;
+  border:none;border-radius:8px;cursor:pointer;background:var(--accent);color:#fff;
+}
+button:active,.btn:active{background:var(--accent-dark);}
+button.secondary{background:#fff;color:var(--text);border:1px solid var(--border);}
+button.danger{background:#fff;color:var(--danger);border:1px solid #f3c2c2;}
+button.small{min-height:36px;padding:6px 12px;font-size:13px;}
+.preview{font-size:13px;color:var(--accent-dark);font-weight:600;margin-top:4px;min-height:20px;}
+.error{color:var(--danger);font-size:13px;font-weight:600;margin-top:8px;}
+.hint{font-size:12px;color:var(--muted);margin-top:4px;}
+.hidden{display:none !important;}
+.divider{border:none;border-top:1px solid var(--border);margin:12px 0;}
+/* xe */
+#vehicleInfo{background:var(--accent-soft);border:1px solid #fed7aa;border-radius:8px;padding:10px;margin-top:10px;font-size:14px;}
+#vehicleInfo .vrow{display:flex;justify-content:space-between;padding:2px 0;}
+#vehicleInfo .vrow b{font-weight:700;}
+.vbtns{display:flex;gap:8px;margin-top:8px;}
+.vbtns button{flex:1;}
+/* nhắc nhớt */
+.remind{border:1px solid var(--border);border-radius:8px;padding:10px;margin:8px 0;font-size:14px;}
+.remind.ok{border-left:4px solid var(--ok);background:#f0fdf4;}
+.remind.warn{border-left:4px solid var(--warn);background:#fffbeb;}
+.remind.over{border-left:4px solid var(--danger);background:#fef2f2;}
+.remind b{font-weight:700;}
+details.ref{margin-top:10px;border:1px dashed var(--border);border-radius:8px;padding:8px 10px;font-size:13px;color:var(--muted);}
+details.ref summary{cursor:pointer;font-weight:700;color:var(--text);min-height:44px;display:flex;align-items:center;}
+details.ref ul{margin:6px 0;padding-left:18px;}
+/* tag chips */
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+.chip{border:1px solid var(--border);background:#fff;border-radius:20px;padding:7px 12px;
+  font-size:13px;cursor:pointer;user-select:none;min-height:36px;display:inline-flex;align-items:center;}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}
+/* thống kê */
+.stat-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;}
+.stat{background:var(--accent-soft);border-radius:8px;padding:10px;text-align:center;}
+.stat .v{font-size:18px;font-weight:800;color:var(--accent-dark);}
+.stat .l{font-size:11px;color:var(--muted);margin-top:2px;}
+#fuelBox{font-size:14px;}
+#fuelBox .trend-up{color:var(--ok);font-weight:700;}
+#fuelBox .trend-down{color:var(--danger);font-weight:700;}
+canvas#monthChart{width:100%;height:220px;display:block;}
+/* danh sách */
+.filters{display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;}
+.filters select{flex:1;min-width:120px;}
+.entry{border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;background:#fff;}
+.entry .ehead{display:flex;justify-content:space-between;align-items:center;gap:8px;}
+.entry .ejob{font-weight:700;font-size:14px;}
+.entry .edate{font-size:12px;color:var(--muted);}
+.entry .eamt{font-size:17px;font-weight:800;color:var(--accent-dark);margin:4px 0;}
+.entry .emeta{font-size:12px;color:var(--muted);}
+.entry .etags{margin-top:6px;display:flex;flex-wrap:wrap;gap:4px;}
+.entry .etag{background:#f3f4f6;border-radius:12px;padding:2px 8px;font-size:11px;color:var(--muted);}
+.entry .eactions{display:flex;gap:8px;margin-top:8px;}
+.entry .eactions button{flex:1;}
+.entry img.bill{max-width:100%;height:auto;border-radius:8px;margin-top:8px;border:1px solid var(--border);}
+.empty{padding:24px 12px;text-align:center;color:var(--muted);font-size:14px;}
+/* báo cáo */
+#reportArea{border:1px solid var(--border);border-radius:8px;padding:14px;margin-top:10px;background:#fff;}
+#reportArea h3{margin:0 0 6px;font-size:16px;}
+#reportArea p{margin:4px 0;font-size:13px;}
+#reportArea table{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px;}
+#reportArea th,#reportArea td{border:1px solid #d1d5db;padding:5px 6px;text-align:left;vertical-align:top;}
+#reportArea th{background:#f3f4f6;}
+/* modal */
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;
+  padding:16px;z-index:50;}
+.modal-box{background:#fff;border-radius:14px;padding:18px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;}
+.modal-box h2{margin:0 0 6px;font-size:17px;}
+.modal .macts{display:flex;gap:8px;margin-top:14px;}
+.modal .macts button{flex:1;}
+.radio-row{display:flex;gap:8px;margin-top:4px;}
+.radio-row label{flex:1;border:1px solid var(--border);border-radius:8px;padding:10px;text-align:center;
+  font-weight:600;cursor:pointer;margin:0;min-height:44px;display:flex;align-items:center;justify-content:center;}
+.radio-row input{display:none;}
+.radio-row input:checked+span{font-weight:800;}
+.radio-row label:has(input:checked){border-color:var(--accent);background:var(--accent-soft);}
+#billPreview img{max-width:100%;height:auto;border-radius:8px;border:1px solid var(--border);margin-top:6px;}
+footer{margin-top:20px;text-align:center;color:var(--muted);font-size:12px;}
+@media (max-width:420px){
+  .stat-grid{grid-template-columns:1fr 1fr;}
+  body{font-size:14px;}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>Nhật ký xe</h1>
+    <p>Theo dõi đổ xăng, thay nhớt, bảo dưỡng và mọi chi phí cho xe</p>
+  </header>
+
+  <!-- XE -->
+  <section class="card" id="sec-vehicle">
+    <h2>Xe của tôi</h2>
+    <div class="row">
+      <select id="vehicleSelect" aria-label="Chọn xe"></select>
+      <button id="btnAddVehicle" class="narrow secondary" type="button">+ Thêm xe</button>
+    </div>
+    <div id="vehicleInfo"></div>
+    <div class="vbtns">
+      <button id="btnEditVehicle" type="button" class="secondary small">Sửa xe</button>
+      <button id="btnDeleteVehicle" type="button" class="danger small">Xóa xe</button>
+    </div>
+    <hr class="divider">
+    <h3>Nhắc thay nhớt</h3>
+    <div id="reminderList"></div>
+    <label for="kmCalcInput">Nhập số km hiện tại để xem mốc thay nhớt tiếp theo</label>
+    <div class="row">
+      <input type="number" id="kmCalcInput" min="0" step="1" placeholder="Ví dụ: 20500">
+      <button id="kmCalcBtn" type="button" class="narrow secondary">Tính</button>
+    </div>
+    <div id="kmCalcResult" class="preview"></div>
+    <div class="row" style="margin-top:6px;">
+      <button id="btnSaveKm" type="button" class="secondary small">Lưu số km này cho xe</button>
+    </div>
+    <details class="ref">
+      <summary>Mốc tham khảo</summary>
+      <ul>
+        <li><b>Xe số / gắn máy:</b> nhớt máy mỗi 1.500–2.000 km (xe mới thay lần đầu ở 1.000 km; xe cũ 1.000–1.500 km).</li>
+        <li><b>Xe tay ga:</b> nhớt máy khoảng 2.000 km; nhớt láp (nhớt hộp số) mỗi 6.000 km.</li>
+        <li>Bạn có thể chỉnh chu kỳ trong phần "Sửa xe" cho đúng xe của mình.</li>
+      </ul>
+    </details>
+  </section>
+
+  <!-- FORM BẢN GHI -->
+  <section class="card" id="sec-form">
+    <h2 id="formTitle">Thêm bản ghi</h2>
+    <form id="entryForm" novalidate>
+      <label for="fVehicle">Xe</label>
+      <select id="fVehicle"></select>
+      <label for="fJob">Loại công việc</label>
+      <select id="fJob">
+        <option>Đổ xăng</option><option>Thay nhớt</option><option>Bảo dưỡng</option>
+        <option>Sửa chữa</option><option>Rửa xe</option><option>Việc khác</option>
+      </select>
+      <label for="fDate">Ngày thực hiện</label>
+      <input type="date" id="fDate">
+      <label for="fAmount">Số tiền (đ)</label>
+      <input type="text" id="fAmount" inputmode="decimal" placeholder="Ví dụ: 80k, 1.5m, 200000" autocomplete="off">
+      <div id="amountPreview" class="preview"></div>
+      <div class="hint">Nhập tắt: 1k = 1.000 đ, 1m = 1.000.000 đ, 1b = 1.000.000.000 đ</div>
+      <label for="fLiters">Số lít (chỉ cần khi đổ xăng)</label>
+      <input type="number" id="fLiters" min="0" step="0.01" placeholder="Ví dụ: 3.5">
+      <label for="fOdo">Công-tơ-mét (km)</label>
+      <input type="number" id="fOdo" min="0" step="1" placeholder="Ví dụ: 20500">
+      <label for="fNote">Ghi chú</label>
+      <input type="text" id="fNote" placeholder="Ví dụ: Petrolimex cầu vượt" autocomplete="off">
+      <label>Tag</label>
+      <div class="chips" id="tagChips"></div>
+      <div class="row" style="margin-top:8px;">
+        <input type="text" id="tagCustomInput" placeholder="Thêm tag mới..." autocomplete="off">
+        <button type="button" id="btnAddTag" class="narrow secondary">Thêm</button>
+      </div>
+      <label for="fBill">Ảnh bill</label>
+      <input type="file" id="fBill" accept="image/*">
+      <div id="billPreview"></div>
+      <div class="row hidden" id="billRemoveWrap" style="margin-top:6px;">
+        <button type="button" id="billRemove" class="secondary small">Gỡ ảnh</button>
+      </div>
+      <label id="fGearOilWrap" class="hidden" style="font-weight:600;">
+        <input type="checkbox" id="fGearOil" style="width:auto;min-height:0;"> Đã thay nhớt láp (xe tay ga)
+      </label>
+      <div class="error hidden" id="formError"></div>
+      <div class="row" style="margin-top:12px;">
+        <button type="submit" id="btnSaveEntry">Lưu bản ghi</button>
+        <button type="button" id="btnCancelEntry" class="secondary hidden">Hủy</button>
+      </div>
+    </form>
+  </section>
+
+  <!-- THỐNG KÊ -->
+  <section class="card" id="sec-stats">
+    <h2>Thống kê</h2>
+    <div class="stat-grid">
+      <div class="stat"><div class="v" id="statMonth">0 đ</div><div class="l">Chi tháng này</div></div>
+      <div class="stat"><div class="v" id="statTotal">0 đ</div><div class="l">Tổng chi</div></div>
+      <div class="stat"><div class="v" id="statCount">0</div><div class="l">Số việc</div></div>
+    </div>
+    <h3>Mức tiêu thụ xăng</h3>
+    <div id="fuelBox"><span class="hint">Chưa đủ dữ liệu (cần ít nhất 2 lần đổ xăng có số km).</span></div>
+    <h3>Chi tiêu theo tháng</h3>
+    <canvas id="monthChart" width="640" height="220"></canvas>
+  </section>
+
+  <!-- DANH SÁCH -->
+  <section class="card" id="sec-list">
+    <h2>Lịch sử chăm xe</h2>
+    <div class="filters">
+      <select id="filterJob" aria-label="Lọc theo loại">
+        <option value="">Tất cả loại</option>
+        <option>Đổ xăng</option><option>Thay nhớt</option><option>Bảo dưỡng</option>
+        <option>Sửa chữa</option><option>Rửa xe</option><option>Việc khác</option>
+      </select>
+      <select id="filterTag" aria-label="Lọc theo tag">
+        <option value="">Tất cả tag</option>
+      </select>
+    </div>
+    <div class="row" style="margin-bottom:10px;">
+      <button id="btnDeleteAll" type="button" class="danger small">Xóa tất cả bản ghi</button>
+    </div>
+    <div id="entryList"></div>
+  </section>
+
+  <!-- BÁO CÁO -->
+  <section class="card" id="sec-report">
+    <h2>Xuất báo cáo</h2>
+    <div class="row">
+      <button id="btnExportImg" type="button" class="secondary">Xuất ảnh</button>
+      <button id="btnExportExcel" type="button">Xuất Excel</button>
+    </div>
+    <div id="reportArea"></div>
+  </section>
+
+  <footer>Nhật ký xe — dữ liệu lưu trên máy này (offline 100%)</footer>
+</div>
+
+<!-- MODAL XE -->
+<div id="vehicleModal" class="modal hidden">
+  <div class="modal-box">
+    <h2 id="vmTitle">Thêm xe</h2>
+    <form id="vehicleForm" novalidate>
+      <label for="vName">Tên xe</label>
+      <input type="text" id="vName" placeholder="Ví dụ: Vision trắng" autocomplete="off">
+      <label for="vBrand">Hãng xe</label>
+      <select id="vBrand"></select>
+      <div id="vBrandOtherWrap" class="hidden">
+        <label for="vBrandOther">Tên hãng (tự nhập)</label>
+        <input type="text" id="vBrandOther" placeholder="Nhập tên hãng..." autocomplete="off">
+      </div>
+      <label>Loại xe</label>
+      <div class="radio-row">
+        <label><input type="radio" name="vType" value="ga" checked><span>Xe tay ga</span></label>
+        <label><input type="radio" name="vType" value="so"><span>Xe số / gắn máy</span></label>
+      </div>
+      <label for="vOdo">Km hiện tại trên đồng hồ</label>
+      <input type="number" id="vOdo" min="0" step="1" placeholder="Ví dụ: 20500">
+      <label for="vStartKm">Mốc km bắt đầu tính</label>
+      <input type="number" id="vStartKm" min="0" step="1" placeholder="Ví dụ: 19000">
+      <label for="vStartDate">Ngày bắt đầu tính</label>
+      <input type="date" id="vStartDate">
+      <label for="vOilKm">Chu kỳ nhớt máy (km)</label>
+      <input type="number" id="vOilKm" min="100" step="100" value="2000">
+      <label for="vOilMonth">Chu kỳ theo tháng</label>
+      <input type="number" id="vOilMonth" min="1" step="1" value="4">
+      <div class="error hidden" id="vError"></div>
+      <div class="macts">
+        <button type="submit">Lưu xe</button>
+        <button type="button" id="btnVCancel" class="secondary">Hủy</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- MODAL XÁC NHẬN -->
+<div id="confirmModal" class="modal hidden">
+  <div class="modal-box">
+    <h2 id="cmTitle">Xác nhận</h2>
+    <p id="cmMsg" style="font-size:14px;"></p>
+    <div class="macts">
+      <button type="button" id="cmOk" class="danger">Xóa</button>
+      <button type="button" id="cmCancel" class="secondary">Hủy</button>
+    </div>
+  </div>
+</div>
+
+<!--INJECT_SHEETJS-->
+<!--INJECT_HTML2CANVAS-->
+<script>
+'use strict';
+/* Nhat ky xe - ung dung offline, du lieu luu trong localStorage key nhatkyxe.v1 */
+var LS_KEY = 'nhatkyxe.v1';
+var BRANDS = ['Honda','Yamaha','Suzuki','SYM','Piaggio','Vespa','Kymco','Kawasaki','KTM','BMW Motorrad','Ducati','Triumph','Harley-Davidson','VinFast','Yadea','Dat Bike','Hãng khác'];
+var JOB_TYPES = ['Đổ xăng','Thay nhớt','Bảo dưỡng','Sửa chữa','Rửa xe','Việc khác'];
+var SUGGEST_TAGS = ['Đi xa','Đổ đầy bình','Ưu tiên','Đại lý','Tự làm','Bill ngân hàng'];
+var GEAR_OIL_CYCLE = 6000;
+
+/* ---------- helpers ---------- */
+function $(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s==null?'':s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function uid(){ return 'id'+Date.now().toString(36)+Math.random().toString(36).slice(2,8); }
+function fmtMoney(n){
+  n = Math.round(+n||0);
+  return n.toLocaleString('vi-VN') + ' đ';
+}
+function pad2(n){ return (n<10?'0':'')+n; }
+function todayStr(){
+  var d = new Date();
+  return d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate());
+}
+function parseYMD(s){
+  if(!s) return null;
+  var p = String(s).split('-');
+  if(p.length!==3) return null;
+  var d = new Date(+p[0], +p[1]-1, +p[2]);
+  return isNaN(d.getTime()) ? null : d;
+}
+function fmtDate(s){
+  var d = parseYMD(s);
+  if(!d) return '';
+  return pad2(d.getDate())+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear();
+}
+function fmtDateTime(d){
+  d = d||new Date();
+  return pad2(d.getDate())+'/'+pad2(d.getMonth()+1)+'/'+d.getFullYear()+' '+pad2(d.getHours())+':'+pad2(d.getMinutes());
+}
+function startOfDay(d){ var x=new Date(d); x.setHours(0,0,0,0); return x; }
+function addMonths(d, m){
+  var x = new Date(d);
+  x.setMonth(x.getMonth()+m);
+  return x;
+}
+function monthKey(s){ return String(s||'').slice(0,7); } /* YYYY-MM */
+function monthLabel(ym){
+  var p = String(ym).split('-');
+  return p[1]+'/'+p[0];
+}
+
+/* Nhap tat so tien: 1k=1000, 1m=1000000, 1b=1000000000, 1.5m=1500000 */
+function parseMoney(s){
+  if(s==null) return NaN;
+  s = String(s).trim().toLowerCase().replace(/[\s_]/g,'').replace(/(đ|d|vnd)$/,'');
+  if(!s) return NaN;
+  var m = s.match(/^(\d+(?:[.,]\d+)?)([kmb])?$/);
+  if(!m) return NaN;
+  var numStr = m[1];
+  if(!m[2] && /^\d{1,3}(\.\d{3})+$/.test(numStr)){
+    numStr = numStr.replace(/\./g,''); /* 80.000 -> 80000 */
+  } else {
+    numStr = numStr.replace(',','.');
+  }
+  var n = parseFloat(numStr);
+  if(isNaN(n)) return NaN;
+  var mult = m[2]==='k' ? 1000 : m[2]==='m' ? 1000000 : m[2]==='b' ? 1000000000 : 1;
+  return Math.round(n*mult);
+}
+
+/* ---------- state ---------- */
+var db = null;
+function defaultDb(){
+  return { vehicles:[], entries:[], customTags:[], selectedVehicleId:'all' };
+}
+function load(){
+  try{
+    var raw = localStorage.getItem(LS_KEY);
+    if(!raw) return defaultDb();
+    var d = JSON.parse(raw);
+    if(!d || !Array.isArray(d.vehicles) || !Array.isArray(d.entries)) return defaultDb();
+    if(!Array.isArray(d.customTags)) d.customTags = [];
+    if(!('selectedVehicleId' in d)) d.selectedVehicleId = 'all';
+    return d;
+  }catch(e){ return defaultDb(); }
+}
+function save(){
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify(db));
+  }catch(e){
+    alert('Không lưu được dữ liệu: bộ nhớ máy đã đầy. Hãy xóa bớt ảnh bill cũ rồi thử lại.');
+    throw e;
+  }
+}
+function getVehicle(id){ return db.vehicles.find(function(v){return v.id===id;}) || null; }
+function scopeVehicleIds(){
+  if(db.selectedVehicleId && db.selectedVehicleId!=='all') return [db.selectedVehicleId];
+  return db.vehicles.map(function(v){return v.id;});
+}
+function scopeEntries(){
+  var ids = scopeVehicleIds();
+  return db.entries.filter(function(e){ return ids.indexOf(e.vehicleId)>=0; });
+}
+function brandName(v){
+  if(!v) return '';
+  return v.brand==='Hãng khác' ? (v.brandOther||'Hãng khác') : v.brand;
+}
+function typeName(v){ return v && v.type==='ga' ? 'Xe tay ga' : 'Xe số / gắn máy'; }
+
+/* ---------- modal xac nhan ---------- */
+function askConfirm(title, msg, okText){
+  return new Promise(function(resolve){
+    $('cmTitle').textContent = title;
+    $('cmMsg').textContent = msg;
+    $('cmOk').textContent = okText || 'Xóa';
+    $('confirmModal').classList.remove('hidden');
+    function done(v){
+      $('confirmModal').classList.add('hidden');
+      $('cmOk').onclick = $('cmCancel').onclick = null;
+      resolve(v);
+    }
+    $('cmOk').onclick = function(){ done(true); };
+    $('cmCancel').onclick = function(){ done(false); };
+  });
+}
+
+/* ---------- xe ---------- */
+var editingVehicleId = null;
+function populateBrands(){
+  var sel = $('vBrand');
+  sel.innerHTML = '';
+  BRANDS.forEach(function(b){
+    var o = document.createElement('option');
+    o.value = b; o.textContent = b;
+    sel.appendChild(o);
+  });
+}
+function renderVehicleSelect(){
+  var sel = $('vehicleSelect');
+  sel.innerHTML = '';
+  var oAll = document.createElement('option');
+  oAll.value = 'all'; oAll.textContent = 'Tất cả xe';
+  sel.appendChild(oAll);
+  db.vehicles.forEach(function(v){
+    var o = document.createElement('option');
+    o.value = v.id;
+    o.textContent = (v.name||'Xe') + ' (' + brandName(v) + ')';
+    sel.appendChild(o);
+  });
+  sel.value = db.selectedVehicleId || 'all';
+  var fs = $('fVehicle');
+  fs.innerHTML = '';
+  db.vehicles.forEach(function(v){
+    var o = document.createElement('option');
+    o.value = v.id;
+    o.textContent = (v.name||'Xe') + ' (' + brandName(v) + ')';
+    fs.appendChild(o);
+  });
+  if(db.selectedVehicleId && db.selectedVehicleId!=='all') fs.value = db.selectedVehicleId;
+}
+function renderVehicleInfo(){
+  var box = $('vehicleInfo');
+  var v = getVehicle(db.selectedVehicleId);
+  if(!v){
+    if(db.selectedVehicleId==='all' && db.vehicles.length){
+      box.innerHTML = '<div class="vrow"><span>Đang xem</span><b>Tất cả '+db.vehicles.length+' xe</b></div>';
+    } else {
+      box.innerHTML = '<span class="hint">Chưa có xe nào. Bấm "+ Thêm xe" để bắt đầu.</span>';
+    }
+    $('btnEditVehicle').style.display = 'none';
+    $('btnDeleteVehicle').style.display = 'none';
+    return;
+  }
+  $('btnEditVehicle').style.display = '';
+  $('btnDeleteVehicle').style.display = '';
+  box.innerHTML =
+    '<div class="vrow"><span>Tên xe</span><b>'+esc(v.name||'')+'</b></div>'+
+    '<div class="vrow"><span>Hãng</span><b>'+esc(brandName(v))+'</b></div>'+
+    '<div class="vrow"><span>Loại</span><b>'+esc(typeName(v))+'</b></div>'+
+    '<div class="vrow"><span>Km hiện tại</span><b>'+(+v.odo||0).toLocaleString('vi-VN')+' km</b></div>';
+}
+function openVehicleModal(id){
+  editingVehicleId = id || null;
+  $('vmTitle').textContent = id ? 'Sửa xe' : 'Thêm xe';
+  $('vError').classList.add('hidden');
+  var v = id ? getVehicle(id) : null;
+  $('vName').value = v ? (v.name||'') : '';
+  $('vBrand').value = v ? (v.brand||'Honda') : 'Honda';
+  $('vBrandOtherWrap').classList.toggle('hidden', $('vBrand').value!=='Hãng khác');
+  $('vBrandOther').value = v ? (v.brandOther||'') : '';
+  var radios = document.getElementsByName('vType');
+  for(var i=0;i<radios.length;i++) radios[i].checked = (v ? v.type : 'ga')===radios[i].value;
+  $('vOdo').value = v && v.odo!=null ? v.odo : '';
+  $('vStartKm').value = v && v.startKm!=null ? v.startKm : '';
+  $('vStartDate').value = v && v.startDate ? v.startDate : todayStr();
+  $('vOilKm').value = v && v.oilCycleKm ? v.oilCycleKm : 2000;
+  $('vOilMonth').value = v && v.oilCycleMonths ? v.oilCycleMonths : 4;
+  $('vehicleModal').classList.remove('hidden');
+}
+function closeVehicleModal(){ $('vehicleModal').classList.add('hidden'); editingVehicleId = null; }
+function saveVehicle(ev){
+  ev.preventDefault();
+  var errBox = $('vError');
+  function err(m){ errBox.textContent = m; errBox.classList.remove('hidden'); }
+  errBox.classList.add('hidden');
+  var name = $('vName').value.trim();
+  if(!name){ err('Hãy nhập tên xe.'); return; }
+  var brand = $('vBrand').value;
+  var brandOther = $('vBrandOther').value.trim();
+  if(brand==='Hãng khác' && !brandOther){ err('Hãy nhập tên hãng xe.'); return; }
+  var type = 'ga';
+  var radios = document.getElementsByName('vType');
+  for(var i=0;i<radios.length;i++) if(radios[i].checked) type = radios[i].value;
+  var odo = $('vOdo').value===''?0:+$('vOdo').value;
+  var startKm = $('vStartKm').value===''?0:+$('vStartKm').value;
+  if(odo<0 || startKm<0){ err('Số km không được âm.'); return; }
+  var startDate = $('vStartDate').value || todayStr();
+  if(!parseYMD(startDate)){ err('Ngày bắt đầu tính không hợp lệ.'); return; }
+  var oilKm = +$('vOilKm').value || 2000;
+  var oilMonth = +$('vOilMonth').value || 4;
+  if(oilKm<=0 || oilMonth<=0){ err('Chu kỳ nhớt phải lớn hơn 0.'); return; }
+  var v = editingVehicleId ? getVehicle(editingVehicleId) : null;
+  if(v){
+    v.name=name; v.brand=brand; v.brandOther=brandOther; v.type=type;
+    v.odo=odo; v.startKm=startKm; v.startDate=startDate;
+    v.oilCycleKm=oilKm; v.oilCycleMonths=oilMonth;
+  }else{
+    v = { id:uid(), name:name, brand:brand, brandOther:brandOther, type:type,
+      odo:odo, startKm:startKm, startDate:startDate,
+      oilCycleKm:oilKm, oilCycleMonths:oilMonth,
+      lastOilKm:startKm, lastOilDate:startDate,
+      lastGearKm:startKm, lastGearDate:startDate };
+    db.vehicles.push(v);
+    db.selectedVehicleId = v.id;
+  }
+  try{ save(); }catch(e){ return; }
+  closeVehicleModal();
+  renderAll();
+}
+async function deleteVehicle(){
+  var v = getVehicle(db.selectedVehicleId);
+  if(!v) return;
+  var n = db.entries.filter(function(e){return e.vehicleId===v.id;}).length;
+  var ok = await askConfirm('Xóa xe?', 'Xóa xe "'+(v.name||'')+'" cùng '+n+' bản ghi của xe này? Không thể khôi phục.', 'Xóa xe');
+  if(!ok) return;
+  db.entries = db.entries.filter(function(e){return e.vehicleId!==v.id;});
+  db.vehicles = db.vehicles.filter(function(x){return x.id!==v.id;});
+  db.selectedVehicleId = 'all';
+  try{ save(); }catch(e){ return; }
+  renderAll();
+}
+
+/* ---------- nhac thay nhot ---------- */
+function nextMilestone(baseKm, cycleKm, curKm){
+  baseKm = +baseKm||0; cycleKm = +cycleKm||2000; curKm = +curKm||0;
+  var n = 1;
+  if(curKm > baseKm) n = Math.ceil((curKm-baseKm)/cycleKm);
+  return baseKm + n*cycleKm;
+}
+function oilStatus(v){
+  var curKm = +v.odo||0;
+  var baseKm = (v.lastOilKm!=null && v.lastOilKm!=='') ? +v.lastOilKm : (+v.startKm||0);
+  var nextKm = nextMilestone(baseKm, +v.oilCycleKm||2000, curKm);
+  var lastDate = parseYMD(v.lastOilDate || v.startDate) || new Date();
+  var nextDate = addMonths(lastDate, +v.oilCycleMonths||4);
+  var daysLeft = Math.ceil((startOfDay(nextDate)-startOfDay(new Date()))/86400000);
+  var gear = null;
+  if(v.type==='ga'){
+    var gbase = (v.lastGearKm!=null && v.lastGearKm!=='') ? +v.lastGearKm : (+v.startKm||0);
+    var gnext = nextMilestone(gbase, GEAR_OIL_CYCLE, curKm);
+    gear = { nextKm:gnext, left:gnext-curKm };
+  }
+  return { nextKm:nextKm, kmLeft:nextKm-curKm, nextDate:nextDate, daysLeft:daysLeft, gear:gear };
+}
+function remindClass(over, warn){ return over ? 'over' : (warn ? 'warn' : 'ok'); }
+function renderReminders(){
+  var box = $('reminderList');
+  var list = db.selectedVehicleId==='all' ? db.vehicles : (getVehicle(db.selectedVehicleId)?[getVehicle(db.selectedVehicleId)]:[]);
+  if(!list.length){ box.innerHTML = '<span class="hint">Thêm xe để xem nhắc thay nhớt.</span>'; return; }
+  var html = '';
+  list.forEach(function(v){
+    var s = oilStatus(v);
+    var kmCls = remindClass(s.kmLeft<=0, s.kmLeft<=300);
+    var dCls = remindClass(s.daysLeft<=0, s.daysLeft<=30);
+    var kmTxt = s.kmLeft<=0
+      ? 'Đã quá hạn <b>'+Math.abs(s.kmLeft).toLocaleString('vi-VN')+' km</b> — nên thay ngay'
+      : 'Còn <b>'+s.kmLeft.toLocaleString('vi-VN')+' km</b> nữa (mốc <b>'+s.nextKm.toLocaleString('vi-VN')+' km</b>)';
+    var dTxt = s.daysLeft<=0
+      ? 'Đã quá hạn <b>'+Math.abs(s.daysLeft)+' ngày</b> (từ '+fmtDate(s.nextDate.getFullYear()+'-'+pad2(s.nextDate.getMonth()+1)+'-'+pad2(s.nextDate.getDate()))+')'
+      : 'Còn <b>'+s.daysLeft+' ngày</b> (đến '+fmtDate(s.nextDate.getFullYear()+'-'+pad2(s.nextDate.getMonth()+1)+'-'+pad2(s.nextDate.getDate()))+')';
+    html += '<div class="remind '+kmCls+'"><b>'+esc(v.name||'Xe')+'</b> — Nhớt máy (theo km): '+kmTxt+'</div>';
+    html += '<div class="remind '+dCls+'"><b>'+esc(v.name||'Xe')+'</b> — Nhớt máy (theo tháng): '+dTxt+'</div>';
+    if(s.gear){
+      var g = s.gear;
+      var gCls = remindClass(g.left<=0, g.left<=500);
+      var gTxt = g.left<=0
+        ? 'Đã quá hạn <b>'+Math.abs(g.left).toLocaleString('vi-VN')+' km</b> — nên thay ngay'
+        : 'Còn <b>'+g.left.toLocaleString('vi-VN')+' km</b> nữa (mốc <b>'+g.nextKm.toLocaleString('vi-VN')+' km</b>)';
+      html += '<div class="remind '+gCls+'"><b>'+esc(v.name||'Xe')+'</b> — Nhớt láp: '+gTxt+'</div>';
+    }
+  });
+  box.innerHTML = html;
+}
+function calcMilestone(){
+  var v = getVehicle(db.selectedVehicleId);
+  var res = $('kmCalcResult');
+  if(!v){ res.textContent = 'Hãy chọn một xe cụ thể để tính.'; return; }
+  var km = $('kmCalcInput').value===''?NaN:+$('kmCalcInput').value;
+  if(isNaN(km) || km<0){ res.textContent = 'Hãy nhập số km hợp lệ (>= 0).'; return; }
+  var baseKm = (v.lastOilKm!=null && v.lastOilKm!=='') ? +v.lastOilKm : (+v.startKm||0);
+  var next = nextMilestone(baseKm, +v.oilCycleKm||2000, km);
+  res.textContent = 'Mốc thay nhớt tiếp theo: ' + next.toLocaleString('vi-VN') + ' km';
+  res.dataset.km = String(km);
+}
+function saveKmToVehicle(){
+  var v = getVehicle(db.selectedVehicleId);
+  var res = $('kmCalcResult');
+  if(!v){ res.textContent = 'Hãy chọn một xe cụ thể.'; return; }
+  var km = $('kmCalcInput').value===''?NaN:+$('kmCalcInput').value;
+  if(isNaN(km) || km<0){ res.textContent = 'Hãy nhập số km hợp lệ (>= 0) trước khi lưu.'; return; }
+  v.odo = km;
+  try{ save(); }catch(e){ return; }
+  res.textContent = 'Đã lưu '+km.toLocaleString('vi-VN')+' km cho xe '+v.name+'.';
+  renderAll();
+}
+
+/* ---------- form ban ghi ---------- */
+var editingEntryId = null;
+var selectedTags = [];
+var pendingBill = null; /* dataURL anh bill dang chon */
+var BILL_REMOVED = '[[bill-removed]]'; /* danh dau go anh bill khi sua */
+function allTagOptions(){
+  var set = {};
+  SUGGEST_TAGS.forEach(function(t){ set[t]=1; });
+  db.customTags.forEach(function(t){ set[t]=1; });
+  db.entries.forEach(function(e){ (e.tags||[]).forEach(function(t){ set[t]=1; }); });
+  return Object.keys(set);
+}
+function renderTagChips(){
+  var box = $('tagChips');
+  box.innerHTML = '';
+  allTagOptions().forEach(function(t){
+    var s = document.createElement('span');
+    s.className = 'chip' + (selectedTags.indexOf(t)>=0 ? ' on' : '');
+    s.textContent = t;
+    s.onclick = function(){
+      var i = selectedTags.indexOf(t);
+      if(i>=0) selectedTags.splice(i,1); else selectedTags.push(t);
+      renderTagChips();
+    };
+    box.appendChild(s);
+  });
+}
+function addCustomTag(){
+  var inp = $('tagCustomInput');
+  var t = inp.value.trim();
+  if(!t) return;
+  if(db.customTags.indexOf(t)<0 && SUGGEST_TAGS.indexOf(t)<0) db.customTags.push(t);
+  if(selectedTags.indexOf(t)<0) selectedTags.push(t);
+  inp.value = '';
+  try{ save(); }catch(e){ return; }
+  renderTagChips();
+}
+function resetEntryForm(){
+  editingEntryId = null;
+  selectedTags = [];
+  pendingBill = null;
+  $('formTitle').textContent = 'Thêm bản ghi';
+  $('entryForm').reset();
+  $('fDate').value = todayStr();
+  if(db.selectedVehicleId && db.selectedVehicleId!=='all') $('fVehicle').value = db.selectedVehicleId;
+  $('amountPreview').textContent = '';
+  $('billPreview').innerHTML = '';
+  $('billRemoveWrap').classList.add('hidden');
+  $('formError').classList.add('hidden');
+  $('btnCancelEntry').classList.add('hidden');
+  $('btnSaveEntry').textContent = 'Lưu bản ghi';
+  updateGearOilWrap();
+  renderTagChips();
+}
+function updateGearOilWrap(){
+  var v = getVehicle($('fVehicle').value);
+  $('fGearOilWrap').classList.toggle('hidden', !(v && v.type==='ga' && $('fJob').value==='Thay nhớt'));
+}
+function updateAmountPreview(){
+  var box = $('amountPreview');
+  var raw = $('fAmount').value;
+  if(!raw.trim()){ box.textContent=''; return; }
+  var n = parseMoney(raw);
+  if(isNaN(n)) box.textContent = 'Số tiền chưa hợp lệ. Ví dụ: 80k, 1.5m, 200000';
+  else if(n<=0) box.textContent = 'Số tiền phải lớn hơn 0.';
+  else box.textContent = 'Sẽ lưu: ' + fmtMoney(n);
+}
+function processImageFile(file){
+  return new Promise(function(resolve, reject){
+    if(!file) return reject(new Error('empty'));
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function(){
+      try{
+        var max = 1024;
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var scale = Math.min(1, max/Math.max(w,h));
+        var cw = Math.max(1, Math.round(w*scale)), ch = Math.max(1, Math.round(h*scale));
+        var c = document.createElement('canvas');
+        c.width = cw; c.height = ch;
+        c.getContext('2d').drawImage(img, 0, 0, cw, ch);
+        URL.revokeObjectURL(url);
+        resolve(c.toDataURL('image/jpeg', 0.7));
+      }catch(e){ URL.revokeObjectURL(url); reject(e); }
+    };
+    img.onerror = function(){ URL.revokeObjectURL(url); reject(new Error('load')); };
+    img.src = url;
+  });
+}
+function onBillSelect(){
+  var f = $('fBill').files && $('fBill').files[0];
+  if(!f){ return; }
+  processImageFile(f).then(function(dataUrl){
+    pendingBill = dataUrl;
+    $('billPreview').innerHTML = '<img src="'+dataUrl+'" alt="Ảnh bill">';
+    $('billRemoveWrap').classList.remove('hidden');
+  }).catch(function(){
+    alert('Không đọc được ảnh này. Hãy chọn file ảnh khác.');
+    $('fBill').value = '';
+  });
+}
+function formErr(m){
+  var b = $('formError');
+  b.textContent = m; b.classList.remove('hidden');
+  b.scrollIntoView({block:'nearest'});
+}
+function saveEntry(ev){
+  ev.preventDefault();
+  $('formError').classList.add('hidden');
+  var vehicleId = $('fVehicle').value;
+  if(!getVehicle(vehicleId)){ formErr('Hãy thêm xe trước khi ghi.'); return; }
+  var job = $('fJob').value;
+  var date = $('fDate').value;
+  if(!parseYMD(date)){ formErr('Ngày thực hiện không hợp lệ.'); return; }
+  var amount = parseMoney($('fAmount').value);
+  if(isNaN(amount)){ formErr('Số tiền chưa hợp lệ. Ví dụ: 80k, 1.5m, 200000'); return; }
+  if(amount<=0){ formErr('Số tiền phải lớn hơn 0.'); return; }
+  var liters = $('fLiters').value===''?null:+$('fLiters').value;
+  if(liters!=null && (isNaN(liters)||liters<0)){ formErr('Số lít không được âm.'); return; }
+  var odo = $('fOdo').value===''?null:+$('fOdo').value;
+  if(odo!=null && (isNaN(odo)||odo<0)){ formErr('Công-tơ-mét không được âm.'); return; }
+  var note = $('fNote').value.trim();
+  var gearOil = !$('fGearOilWrap').classList.contains('hidden') && $('fGearOil').checked;
+  var old = editingEntryId ? db.entries.find(function(e){return e.id===editingEntryId;}) : null;
+  var billImg;
+  if(pendingBill===BILL_REMOVED) billImg = null;
+  else if(typeof pendingBill==='string' && pendingBill) billImg = pendingBill;
+  else billImg = old ? (old.billImg||null) : null;
+  var entry = old || { id:uid() };
+  entry.vehicleId = vehicleId; entry.jobType = job; entry.date = date;
+  entry.amount = amount; entry.liters = liters; entry.odo = odo;
+  entry.note = note; entry.tags = selectedTags.slice(); entry.billImg = billImg;
+  entry.gearOil = !!gearOil;
+  if(!old) db.entries.push(entry);
+  /* cap nhat moc thay nhot cua xe */
+  if(job==='Thay nhớt'){
+    var v = getVehicle(vehicleId);
+    if(v){
+      if(odo!=null) v.lastOilKm = odo;
+      v.lastOilDate = date;
+      if(gearOil && v.type==='ga'){
+        if(odo!=null) v.lastGearKm = odo;
+        v.lastGearDate = date;
+      }
+    }
+  }
+  try{ save(); }catch(e){ return; }
+  resetEntryForm();
+  renderAll();
+}
+function editEntry(id){
+  var e = db.entries.find(function(x){return x.id===id;});
+  if(!e) return;
+  editingEntryId = id;
+  selectedTags = (e.tags||[]).slice();
+  pendingBill = null;
+  $('formTitle').textContent = 'Sửa bản ghi';
+  $('fVehicle').value = e.vehicleId;
+  $('fJob').value = e.jobType;
+  $('fDate').value = e.date;
+  $('fAmount').value = String(e.amount);
+  $('fLiters').value = e.liters!=null ? e.liters : '';
+  $('fOdo').value = e.odo!=null ? e.odo : '';
+  $('fNote').value = e.note||'';
+  $('fBill').value = '';
+  if(e.billImg){
+    $('billPreview').innerHTML = '<img src="'+e.billImg+'" alt="Ảnh bill">';
+    $('billRemoveWrap').classList.remove('hidden');
+  }else{
+    $('billPreview').innerHTML = '';
+    $('billRemoveWrap').classList.add('hidden');
+  }
+  $('formError').classList.add('hidden');
+  $('btnCancelEntry').classList.remove('hidden');
+  $('btnSaveEntry').textContent = 'Cập nhật';
+  updateGearOilWrap();
+  updateAmountPreview();
+  renderTagChips();
+  $('sec-form').scrollIntoView({behavior:'smooth', block:'start'});
+}
+async function deleteEntry(id){
+  var e = db.entries.find(function(x){return x.id===id;});
+  if(!e) return;
+  var ok = await askConfirm('Xóa bản ghi?', 'Xóa bản ghi '+e.jobType+' ngày '+fmtDate(e.date)+' ('+fmtMoney(e.amount)+')?', 'Xóa');
+  if(!ok) return;
+  db.entries = db.entries.filter(function(x){return x.id!==id;});
+  if(editingEntryId===id) resetEntryForm();
+  try{ save(); }catch(e2){ return; }
+  renderAll();
+}
+
+/* ---------- danh sach + loc ---------- */
+function renderTagFilter(){
+  var sel = $('filterTag');
+  var cur = sel.value;
+  sel.innerHTML = '<option value="">Tất cả tag</option>';
+  allTagOptions().forEach(function(t){
+    var o = document.createElement('option');
+    o.value = t; o.textContent = t;
+    sel.appendChild(o);
+  });
+  sel.value = cur;
+}
+function filteredEntries(){
+  var list = scopeEntries();
+  var fj = $('filterJob').value, ft = $('filterTag').value;
+  if(fj) list = list.filter(function(e){return e.jobType===fj;});
+  if(ft) list = list.filter(function(e){return (e.tags||[]).indexOf(ft)>=0;});
+  list.sort(function(a,b){
+    if(a.date<b.date) return -1;
+    if(a.date>b.date) return 1;
+    return 0;
+  });
+  return list;
+}
+function renderList(){
+  var box = $('entryList');
+  var list = filteredEntries();
+  if(!list.length){
+    box.innerHTML = '<div class="empty">Chưa có bản ghi nào.</div>';
+    return;
+  }
+  var html = '';
+  list.forEach(function(e){
+    var v = getVehicle(e.vehicleId);
+    var meta = [];
+    if(e.liters!=null) meta.push(e.liters + ' lít');
+    if(e.odo!=null) meta.push((+e.odo).toLocaleString('vi-VN') + ' km');
+    if(v) meta.push(esc(v.name||''));
+    var tags = (e.tags||[]).map(function(t){return '<span class="etag">'+esc(t)+'</span>';}).join('');
+    html += '<div class="entry" data-id="'+e.id+'">'+
+      '<div class="ehead"><span class="ejob">'+esc(e.jobType)+'</span><span class="edate">'+fmtDate(e.date)+'</span></div>'+
+      '<div class="eamt">'+fmtMoney(e.amount)+'</div>'+
+      (meta.length?'<div class="emeta">'+meta.join(' · ')+'</div>':'')+
+      (e.note?'<div class="emeta">'+esc(e.note)+'</div>':'')+
+      (tags?'<div class="etags">'+tags+'</div>':'')+
+      (e.billImg?'<img class="bill" src="'+e.billImg+'" alt="Ảnh bill" loading="lazy">':'')+
+      '<div class="eactions"><button type="button" class="secondary small" data-act="edit">Sửa</button>'+
+      '<button type="button" class="danger small" data-act="del">Xóa</button></div>'+
+      '</div>';
+  });
+  box.innerHTML = html;
+  box.querySelectorAll('.entry').forEach(function(el){
+    var id = el.getAttribute('data-id');
+    el.querySelector('[data-act="edit"]').onclick = function(){ editEntry(id); };
+    el.querySelector('[data-act="del"]').onclick = function(){ deleteEntry(id); };
+  });
+}
+async function deleteAll(){
+  if(!db.entries.length){ alert('Chưa có bản ghi nào để xóa.'); return; }
+  var s1 = await askConfirm('Xóa tất cả bản ghi?',
+    'Bước 1/2: Xóa toàn bộ '+db.entries.length+' bản ghi và ảnh bill? Thông tin xe được giữ lại.', 'Tiếp tục');
+  if(!s1) return;
+  var s2 = await askConfirm('Chắc chắn xóa?',
+    'Bước 2/2: Dữ liệu đã xóa không thể khôi phục.', 'Xóa hết');
+  if(!s2) return;
+  db.entries = [];
+  if(editingEntryId) resetEntryForm();
+  try{ save(); }catch(e){ return; }
+  renderAll();
+}
+
+/* ---------- thong ke ---------- */
+function sumAmount(list){ return list.reduce(function(s,e){return s+(+e.amount||0);},0); }
+function fuelRows(vehicleId){
+  var fills = db.entries.filter(function(e){
+    return e.vehicleId===vehicleId && e.jobType==='Đổ xăng' && e.odo!=null && e.liters!=null && +e.liters>0;
+  }).sort(function(a,b){ return a.date<b.date?-1:a.date>b.date?1:0; });
+  var rows = [];
+  for(var i=1;i<fills.length;i++){
+    var dKm = (+fills[i].odo) - (+fills[i-1].odo);
+    if(dKm>0) rows.push({ date:fills[i].date, kmpl:dKm/(+fills[i].liters) });
+  }
+  return rows;
+}
+function renderStats(){
+  var list = scopeEntries();
+  var mk = todayStr().slice(0,7);
+  var monthList = list.filter(function(e){ return monthKey(e.date)===mk; });
+  $('statMonth').textContent = fmtMoney(sumAmount(monthList));
+  $('statTotal').textContent = fmtMoney(sumAmount(list));
+  $('statCount').textContent = String(list.length);
+  /* muc tieu thu xang */
+  var vids = db.selectedVehicleId==='all' ? db.vehicles.map(function(v){return v.id;})
+    : (getVehicle(db.selectedVehicleId)?[db.selectedVehicleId]:[]);
+  var html = '';
+  vids.forEach(function(vid){
+    var v = getVehicle(vid);
+    var rows = fuelRows(vid);
+    if(rows.length<1) return;
+    var last = rows[rows.length-1];
+    var line = '<div style="margin-bottom:8px;"><b>'+esc(v? v.name||'Xe':'Xe')+'</b>: '+
+      last.kmpl.toFixed(1).replace('.',',')+' km/lít <span class="hint">(ngày '+fmtDate(last.date)+')</span>';
+    if(rows.length>=2){
+      var prev = rows[rows.length-2];
+      var diff = last.kmpl - prev.kmpl;
+      if(Math.abs(diff)<0.05){
+        line += ' <span class="hint">— không đổi so với lần trước</span>';
+      }else if(diff>0){
+        line += ' <span class="trend-up">— tăng '+diff.toFixed(1).replace('.',',')+' km/lít (tiết kiệm hơn)</span>';
+      }else{
+        line += ' <span class="trend-down">— giảm '+Math.abs(diff).toFixed(1).replace('.',',')+' km/lít (tốn hơn)</span>';
+      }
+    }
+    line += '</div>';
+    html += line;
+  });
+  $('fuelBox').innerHTML = html || '<span class="hint">Chưa đủ dữ liệu (cần ít nhất 2 lần đổ xăng có số km).</span>';
+  drawMonthChart(list);
+}
+function lastNMonths(n){
+  var out = [];
+  var d = new Date(); d.setDate(1);
+  for(var i=n-1;i>=0;i--){
+    var x = new Date(d.getFullYear(), d.getMonth()-i, 1);
+    out.push(x.getFullYear()+'-'+pad2(x.getMonth()+1));
+  }
+  return out;
+}
+function drawMonthChart(list){
+  var cv = $('monthChart');
+  var dpr = window.devicePixelRatio||1;
+  var W = cv.clientWidth||600, H = 220;
+  cv.width = W*dpr; cv.height = H*dpr;
+  var ctx = cv.getContext('2d');
+  ctx.scale(dpr,dpr);
+  ctx.clearRect(0,0,W,H);
+  var months = lastNMonths(12);
+  var sums = months.map(function(ym){
+    return sumAmount(list.filter(function(e){return monthKey(e.date)===ym;}));
+  });
+  var max = Math.max.apply(null, sums.concat([1]));
+  var padL=8, padB=26, padT=14;
+  var cw = (W-padL*2)/months.length;
+  ctx.font = '10px -apple-system,"Segoe UI",Roboto,sans-serif';
+  ctx.textAlign = 'center';
+  months.forEach(function(ym,i){
+    var v = sums[i];
+    var bh = (H-padB-padT)*(v/max);
+    var x = padL + i*cw + cw*0.18;
+    var bw = cw*0.64;
+    var y = H-padB-bh;
+    ctx.fillStyle = v>0 ? '#f97316' : '#e5e7eb';
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(x,y,bw,Math.max(bh,2),3); else ctx.rect(x,y,bw,Math.max(bh,2));
+    ctx.fill();
+    ctx.fillStyle = '#6b7280';
+    ctx.fillText(monthLabel(ym), padL+i*cw+cw/2, H-10);
+    if(v>0 && bh>18){
+      ctx.fillStyle = '#9a3412';
+      var lbl = v>=1000000 ? (v/1000000).toFixed(1).replace('.',',')+'tr' : Math.round(v/1000)+'k';
+      ctx.fillText(lbl, padL+i*cw+cw/2, y-4);
+    }
+  });
+}
+
+/* ---------- bao cao ---------- */
+function reportScopeName(){
+  if(db.selectedVehicleId==='all') return 'Tất cả xe';
+  var v = getVehicle(db.selectedVehicleId);
+  return v ? (v.name||'Xe')+' ('+brandName(v)+')' : 'Tất cả xe';
+}
+function buildReportRows(){
+  var list = filteredEntries();
+  var rows = [];
+  rows.push(['BÁO CÁO NHẬT KÝ XE']);
+  rows.push(['Phạm vi: '+reportScopeName()]);
+  rows.push(['Ngày xuất: '+fmtDateTime(new Date())]);
+  rows.push([]);
+  rows.push(['Ngày','Loại công việc','Số tiền (đ)','Số lít','Công-tơ-mét (km)','Ghi chú','Tag']);
+  list.forEach(function(e){
+    rows.push([fmtDate(e.date), e.jobType, +e.amount||0,
+      e.liters!=null?+e.liters:'', e.odo!=null?+e.odo:'',
+      e.note||'', (e.tags||[]).join(', ')]);
+  });
+  rows.push([]);
+  rows.push(['TỔNG HỢP']);
+  rows.push(['Số việc', list.length]);
+  rows.push(['Tổng chi chung (đ)', sumAmount(list)]);
+  rows.push(['Tổng chi theo loại:']);
+  JOB_TYPES.forEach(function(j){
+    var s = sumAmount(list.filter(function(e){return e.jobType===j;}));
+    if(s>0) rows.push([j, s]);
+  });
+  return rows;
+}
+function renderReport(){
+  var list = filteredEntries();
+  var perType = JOB_TYPES.map(function(j){
+    var s = sumAmount(list.filter(function(e){return e.jobType===j;}));
+    return s>0 ? '<p>'+esc(j)+': <b>'+fmtMoney(s)+'</b></p>' : '';
+  }).join('');
+  var trs = list.map(function(e){
+    return '<tr><td>'+fmtDate(e.date)+'</td><td>'+esc(e.jobType)+'</td><td>'+fmtMoney(e.amount)+'</td>'+
+      '<td>'+(e.liters!=null?esc(String(e.liters)):'')+'</td>'+
+      '<td>'+(e.odo!=null?(+e.odo).toLocaleString('vi-VN'):'')+'</td>'+
+      '<td>'+esc(e.note||'')+'</td><td>'+esc((e.tags||[]).join(', '))+'</td></tr>';
+  }).join('');
+  $('reportArea').innerHTML =
+    '<h3>Báo cáo nhật ký xe</h3>'+
+    '<p>Phạm vi: <b>'+esc(reportScopeName())+'</b> · Ngày xuất: '+fmtDateTime(new Date())+'</p>'+
+    '<p>Số việc: <b>'+list.length+'</b> · Tổng chi: <b>'+fmtMoney(sumAmount(list))+'</b></p>'+
+    '<table><thead><tr><th>Ngày</th><th>Loại</th><th>Số tiền</th><th>Lít</th><th>Km</th><th>Ghi chú</th><th>Tag</th></tr></thead>'+
+    '<tbody>'+(trs||'<tr><td colspan="7">Chưa có bản ghi.</td></tr>')+'</tbody></table>'+
+    '<div style="margin-top:8px;"><b>Tổng chi theo loại:</b></div>'+(perType||'<p>—</p>');
+}
+function isNativeApp(){
+  try{ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }catch(e){ return false; }
+}
+function saveFileNative(filename, base64Data, onDone){
+  try{
+    var FS = (window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.Filesystem) || null;
+    if(!FS){ onDone(false); return; }
+    FS.writeFile({ path: filename, data: base64Data, directory: 'DOCUMENTS' }).then(function(){
+      alert('Đã lưu file vào thư mục Documents: ' + filename);
+      onDone(true);
+    }).catch(function(){ onDone(false); });
+  }catch(e){ onDone(false); }
+}
+function exportExcel(){
+  try{
+    var rows = buildReportRows();
+    var ws = XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols'] = [{wch:12},{wch:14},{wch:16},{wch:10},{wch:16},{wch:28},{wch:22}];
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Bao cao');
+    if(isNativeApp()){
+      var b64 = XLSX.write(wb, {bookType:'xlsx', type:'base64'});
+      saveFileNative('bao-cao-nhat-ky-xe.xlsx', b64, function(ok){
+        if(!ok){ XLSX.writeFile(wb, 'bao-cao-nhat-ky-xe.xlsx'); }
+      });
+    }else{
+      XLSX.writeFile(wb, 'bao-cao-nhat-ky-xe.xlsx');
+    }
+  }catch(e){
+    alert('Không xuất được file Excel. Hãy thử lại.');
+  }
+}
+function exportImg(){
+  var node = $('reportArea');
+  try{
+    html2canvas(node, {backgroundColor:'#ffffff', scale:2}).then(function(canvas){
+      var dataUrl = canvas.toDataURL('image/png');
+      var downloadBrowser = function(){
+        var a = document.createElement('a');
+        a.download = 'bao-cao-nhat-ky-xe.png';
+        a.href = dataUrl;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+      };
+      if(isNativeApp()){
+        saveFileNative('bao-cao-nhat-ky-xe.png', dataUrl.split(',')[1], function(ok){
+          if(!ok){ downloadBrowser(); }
+        });
+      }else{
+        downloadBrowser();
+      }
+    }).catch(function(){
+      alert('Không xuất được ảnh. Hãy thử lại.');
+    });
+  }catch(e){
+    alert('Không xuất được ảnh. Hãy thử lại.');
+  }
+}
+
+/* ---------- render tong ---------- */
+function renderAll(){
+  renderVehicleSelect();
+  renderVehicleInfo();
+  renderReminders();
+  renderTagFilter();
+  renderList();
+  renderStats();
+  renderReport();
+}
+
+/* ---------- khoi tao ---------- */
+function init(){
+  db = load();
+  populateBrands();
+  $('fDate').value = todayStr();
+  /* su kien xe */
+  $('vehicleSelect').onchange = function(){
+    db.selectedVehicleId = this.value;
+    try{ save(); }catch(e){}
+    resetEntryForm();
+    renderAll();
+  };
+  $('btnAddVehicle').onclick = function(){ openVehicleModal(null); };
+  $('btnEditVehicle').onclick = function(){ openVehicleModal(db.selectedVehicleId); };
+  $('btnDeleteVehicle').onclick = deleteVehicle;
+  $('vehicleForm').onsubmit = saveVehicle;
+  $('btnVCancel').onclick = closeVehicleModal;
+  $('vBrand').onchange = function(){
+    $('vBrandOtherWrap').classList.toggle('hidden', this.value!=='Hãng khác');
+  };
+  /* nhac nhot */
+  $('kmCalcBtn').onclick = calcMilestone;
+  $('btnSaveKm').onclick = saveKmToVehicle;
+  /* form */
+  $('entryForm').onsubmit = saveEntry;
+  $('btnCancelEntry').onclick = resetEntryForm;
+  $('fAmount').oninput = updateAmountPreview;
+  $('fJob').onchange = updateGearOilWrap;
+  $('fVehicle').onchange = updateGearOilWrap;
+  $('fBill').onchange = onBillSelect;
+  $('billRemove').onclick = function(){
+    pendingBill = BILL_REMOVED;
+    $('billPreview').innerHTML = '';
+    $('fBill').value = '';
+    $('billRemoveWrap').classList.add('hidden');
+  };
+  $('btnAddTag').onclick = addCustomTag;
+  /* loc */
+  $('filterJob').onchange = function(){ renderList(); renderReport(); };
+  $('filterTag').onchange = function(){ renderList(); renderReport(); };
+  $('btnDeleteAll').onclick = deleteAll;
+  /* bao cao */
+  $('btnExportImg').onclick = exportImg;
+  $('btnExportExcel').onclick = exportExcel;
+  window.addEventListener('resize', function(){
+    renderStats();
+  });
+  renderAll();
+  updateGearOilWrap();
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+</script>
+</body>
+</html>

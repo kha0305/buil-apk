@@ -1,0 +1,27 @@
+HƯỚNG DẪN LẤY FILE APK "NHẬT KÝ XE" (không cần Android Studio)
+
+Code đã được đẩy sẵn lên repo GitHub của bạn. Bạn chỉ cần làm các bước sau:
+
+BƯỚC 1: Bật và chạy build APK
+- Mở repo trên github.com, bấm tab "Actions".
+- Lần đầu GitHub có thể hỏi cho phép chạy workflow — bấm "I understand my workflows, go ahead and enable them".
+- Bấm vào workflow "Build APK" ở danh sách bên trái > nút "Run workflow" > "Run workflow".
+- Chờ khoảng 5-10 phút cho đến khi có dấu tick xanh.
+
+BƯỚC 2: Tải file APK
+- Bấm vào lần chạy đã xong (tick xanh), kéo xuống mục "Artifacts", tải file "nhat-ky-xe-apk".
+- Giải nén file vừa tải, bên trong có "app-debug.apk".
+
+BƯỚC 3: Cài lên điện thoại
+- Chép file app-debug.apk vào điện thoại (qua cáp, Zalo, Google Drive...).
+- Mở file trên điện thoại để cài. Máy sẽ hỏi quyền "cài đặt ứng dụng không xác định" — bấm Cho phép là xong.
+- Icon app tên "Nhật ký xe" sẽ hiện trong danh sách ứng dụng.
+
+LƯU Ý QUAN TRỌNG
+- Bản APK này lưu dữ liệu TRÊN MÁY ĐIỆN THOẠI (không đồng bộ với bản web). Mở app lần đầu sẽ trống — bạn nhập lại thông tin xe và các bản ghi.
+- Nút "Xuất Excel" / "Xuất ảnh" trong app sẽ lưu file vào thư mục Documents của điện thoại.
+- Mỗi lần có bản cập nhật mới, code mới sẽ được đẩy lên repo, bạn chỉ cần vào Actions chạy lại workflow là có APK mới.
+
+Xử lý sự cố:
+- Actions báo lỗi: bấm vào lần chạy lỗi, xem log bước nào đỏ để biết nguyên nhân. Lỗi hay gặp nhất là quên bật workflow ở Bước 1.
+- Điện thoại chặn cài đặt: vào Cài đặt > Bảo mật > cho phép "Cài đặt app không xác định" với trình quản lý file bạn đang dùng.
