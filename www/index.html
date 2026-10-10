@@ -61,9 +61,10 @@ button,.btn{
   box-shadow:var(--shadow-accent);transition:transform .08s,box-shadow .15s,filter .15s;
 }
 button:active,.btn:active{transform:scale(.97);box-shadow:0 1px 4px rgba(234,88,12,.3);filter:brightness(.96);}
-button.secondary{background:#fff;color:var(--text-2);border:1px solid #d8dde4;box-shadow:0 1px 2px rgba(16,24,40,.06);}
+button.secondary{background:#fff;color:var(--text-2);border:1px solid #d8dde4;box-shadow:0 1px 2px rgba(16,24,40,.06);font-weight:600;}
 button.secondary:active{background:#f3f4f6;transform:scale(.97);filter:none;}
-button.danger{background:#fff;color:var(--danger);border:1px solid #f3c2c2;box-shadow:0 1px 2px rgba(16,24,40,.05);}
+button.danger{background:#fff;color:var(--danger);border:1px solid #f3c2c2;box-shadow:0 1px 2px rgba(16,24,40,.06);font-weight:600;}
+button.danger:active{background:#fef2f2;transform:scale(.97);}
 button.small{min-height:38px;padding:7px 14px;font-size:13px;}
 .preview{font-size:13px;color:var(--accent-dark);font-weight:700;margin-top:5px;min-height:20px;}
 .error{color:var(--danger);font-size:13px;font-weight:600;margin-top:8px;}
@@ -175,23 +176,23 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
 [data-tab].active{display:block;}
 .app{padding-bottom:110px;}
 #tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:rgba(255,255,255,.98);
-  border-top:1px solid var(--border);display:flex;align-items:stretch;
+  border-top:1px solid var(--border);display:flex;align-items:center;
   padding:6px 4px calc(8px + env(safe-area-inset-bottom));
   box-shadow:0 -4px 20px rgba(16,24,40,.07);}
 #tabbar button{flex:1;border:none;background:none;font:inherit;cursor:pointer;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  padding:7px 2px 5px;color:#9ca3af;border-radius:12px;min-height:56px;}
-#tabbar button svg{width:24px;height:24px;flex:none;transition:transform .18s ease;}
+  padding:7px 2px 5px;color:var(--faint);border-radius:12px;min-height:54px;}
+#tabbar button svg{width:23px;height:23px;flex:none;transition:transform .18s ease;}
 #tabbar button span.tlabel{font-size:11px;font-weight:700;letter-spacing:.1px;}
 #tabbar button .tdot{width:18px;height:3px;border-radius:2px;background:transparent;transition:background .18s;}
 #tabbar button.active{color:var(--accent);}
 #tabbar button.active svg{transform:translateY(-1px);}
 #tabbar button.active .tdot{background:var(--accent);}
 #tabbar button:active svg{transform:scale(.88);}
-#tabbar .tab-add{flex:0 0 58px;align-self:center;height:58px;margin:0 10px;
+#tabbar .tab-add{flex:0 0 50px;align-self:center;height:50px;margin:0 10px;
   background:linear-gradient(180deg,#fb923c,#ea580c);color:#fff;border-radius:50%;
   box-shadow:var(--shadow-accent);padding:0;display:flex;align-items:center;justify-content:center;min-height:0;}
-#tabbar .tab-add svg{width:26px;height:26px;}
+#tabbar .tab-add svg{width:24px;height:24px;}
 #tabbar .tab-add:active{transform:scale(.92);box-shadow:0 2px 8px rgba(234,88,12,.35);}
 body.noscroll{overflow:hidden;}
 .modal.sheet{align-items:flex-end;padding:0;}
@@ -228,7 +229,7 @@ body.noscroll{overflow:hidden;}
     <h2>Xe của tôi</h2>
     <div class="row">
       <select id="vehicleSelect" aria-label="Chọn xe"></select>
-      <button id="btnAddVehicle" class="narrow secondary" type="button">+ Thêm xe</button>
+      <button id="btnAddVehicle" class="narrow" type="button">+ Thêm xe</button>
     </div>
     <div id="vehicleInfo"></div>
     <div class="vbtns">
@@ -241,11 +242,11 @@ body.noscroll{overflow:hidden;}
     <label for="kmCalcInput">Nhập số km hiện tại để xem mốc thay nhớt tiếp theo</label>
     <div class="row">
       <input type="number" id="kmCalcInput" min="0" step="1" placeholder="Ví dụ: 20500">
-      <button id="kmCalcBtn" type="button" class="narrow secondary">Tính</button>
+      <button id="kmCalcBtn" type="button" class="narrow">Tính</button>
     </div>
     <div id="kmCalcResult" class="preview"></div>
     <div class="row" style="margin-top:6px;">
-      <button id="btnSaveKm" type="button" class="secondary small">Lưu số km này cho xe</button>
+      <button id="btnSaveKm" type="button" class="small">Lưu số km này cho xe</button>
     </div>
     <details class="ref">
       <summary>Mốc tham khảo</summary>
