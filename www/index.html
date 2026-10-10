@@ -20,7 +20,8 @@ body{
   background:var(--bg); color:var(--text); font-size:15px; line-height:1.5;
 }
 .app{max-width:720px;margin:0 auto;padding:0 12px 48px;}
-header.top{background:var(--accent);color:#fff;padding:18px 16px 16px;margin:0 -12px 14px;}
+header.top{background:var(--accent);color:#fff;margin:0 -12px 14px;padding:18px 16px 16px;padding-top:calc(18px + env(safe-area-inset-top,0px));}
+body.cap header.top{padding-top:44px;}
 header.top h1{margin:0;font-size:21px;font-weight:700;}
 header.top p{margin:4px 0 0;font-size:13px;opacity:.92;}
 .card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
@@ -963,6 +964,7 @@ function drawMonthChart(list){
   ctx.scale(dpr,dpr);
   ctx.clearRect(0,0,W,H);
   var months = lastNMonths(12);
+  var labelEvery = months.length>8 ? 2 : 1;
   var sums = months.map(function(ym){
     return sumAmount(list.filter(function(e){return monthKey(e.date)===ym;}));
   });
@@ -982,7 +984,7 @@ function drawMonthChart(list){
     if(ctx.roundRect) ctx.roundRect(x,y,bw,Math.max(bh,2),3); else ctx.rect(x,y,bw,Math.max(bh,2));
     ctx.fill();
     ctx.fillStyle = '#6b7280';
-    ctx.fillText(monthLabel(ym), padL+i*cw+cw/2, H-10);
+    if(i%labelEvery===0) ctx.fillText(monthLabel(ym), padL+i*cw+cw/2, H-10);
     if(v>0 && bh>18){
       ctx.fillStyle = '#9a3412';
       var lbl = v>=1000000 ? (v/1000000).toFixed(1).replace('.',',')+'tr' : Math.round(v/1000)+'k';
@@ -1114,6 +1116,7 @@ function renderAll(){
 
 /* ---------- khoi tao ---------- */
 function init(){
+  try{ if(window.Capacitor) document.body.classList.add('cap'); }catch(e){}
   db = load();
   populateBrands();
   $('fDate').value = todayStr();
