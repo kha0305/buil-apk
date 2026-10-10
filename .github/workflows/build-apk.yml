@@ -41,11 +41,19 @@ jobs:
           print('index.html bytes:', len(html.encode('utf-8')))
           EOF
 
+      - name: Decode font files
+        run: |
+          mkdir -p www/fonts
+          for f in www/fonts/*.woff2.b64; do
+            base64 -d "$f" > "${f%.b64}"
+          done
+          ls -la www/fonts/
+
       - name: Add Android platform
         run: npx cap add android
 
       - name: Set Vietnamese app name
-        run: sed -i 's/>Nhat Ky Xe</>Nhật ký xe</g' android/app/src/main/res/values/strings.xml
+        run: sed -i 's/>Quan Ly Chi Tieu</>Quản lý chi tiêu</g' android/app/src/main/res/values/strings.xml
 
       - name: Sync Capacitor
         run: npx cap sync android
