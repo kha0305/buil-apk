@@ -1,5 +1,5 @@
 {
-  "name": "nhatkyxe-apk",
+  "name": "quanlychitieu-apk",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -13,6 +13,7 @@
     "@capacitor/android": "^8.5.3",
     "@capacitor/cli": "^8.5.3",
     "@capacitor/core": "^8.5.3",
-    "@capacitor/filesystem": "^8.1.4"
+    "@capacitor/filesystem": "^8.1.4",
+    "@capgo/capacitor-speech-recognition": "^8.4.1"
   }
 }
