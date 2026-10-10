@@ -50,8 +50,16 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      - name: Prepare signing keystore
+        run: base64 -d debug.keystore.b64 > "$GITHUB_WORKSPACE/debug.keystore"
+
       - name: Build debug APK
-        run: cd android && chmod +x gradlew && ./gradlew assembleDebug
+        run: |
+          cd android && chmod +x gradlew && ./gradlew assembleDebug \
+            -Pandroid.injected.signing.store.file="$GITHUB_WORKSPACE/debug.keystore" \
+            -Pandroid.injected.signing.store.password=android \
+            -Pandroid.injected.signing.key.alias=androiddebugkey \
+            -Pandroid.injected.signing.key.password=android
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
