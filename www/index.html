@@ -210,6 +210,7 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
       <input type="text" id="fAmount" inputmode="decimal" placeholder="Ví dụ: 80k, 1.5m, 200000" autocomplete="off">
       <div id="amountPreview" class="preview"></div>
       <div class="hint">Nhập tắt: 1k = 1.000 đ, 1m = 1.000.000 đ, 1b = 1.000.000.000 đ</div>
+      <div class="chips" id="amtChips"><span class="chip" data-amt="20k">20k</span><span class="chip" data-amt="50k">50k</span><span class="chip" data-amt="100k">100k</span><span class="chip" data-amt="200k">200k</span><span class="chip" data-amt="500k">500k</span><span class="chip" data-amt="1m">1tr</span></div>
       <label for="fLiters">Số lít (chỉ cần khi đổ xăng)</label>
       <input type="number" id="fLiters" min="0" step="0.01" placeholder="Ví dụ: 3.5">
       <label for="fOdo">Công-tơ-mét (km)</label>
@@ -1171,6 +1172,17 @@ function init(){
   $('entryForm').onsubmit = saveEntry;
   $('btnCancelEntry').onclick = resetEntryForm;
   $('fAmount').oninput = updateAmountPreview;
+  (function(){
+    var box = $('amtChips');
+    if(!box) return;
+    var cs = box.querySelectorAll('.chip');
+    for(var i=0;i<cs.length;i++){
+      cs[i].onclick = function(){
+        $('fAmount').value = this.getAttribute('data-amt');
+        updateAmountPreview();
+      };
+    }
+  })();
   $('fJob').onchange = updateGearOilWrap;
   $('fVehicle').onchange = updateGearOilWrap;
   $('fBill').onchange = onBillSelect;
