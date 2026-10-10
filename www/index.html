@@ -152,6 +152,23 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
   .app{padding:0 12px 48px;}
   header.top{margin:0 -12px 14px;}
 }
+
+/* ===== menu tab + popup (10/10) ===== */
+[data-tab]{display:none;}
+[data-tab].active{display:block;}
+.app{padding-bottom:110px;}
+#tabbar{position:fixed;left:0;right:0;bottom:0;z-index:40;background:#fff;border-top:1px solid var(--border);display:flex;align-items:center;padding:8px 10px calc(8px + env(safe-area-inset-bottom));}
+#tabbar button{flex:1;border:none;background:none;font:inherit;font-size:13px;font-weight:700;color:#6b7280;padding:10px 4px;border-radius:10px;cursor:pointer;}
+#tabbar button.active{color:#ea580c;}
+#tabbar .tab-add{flex:0 0 58px;height:58px;margin:-24px 10px 0;background:linear-gradient(180deg,#fb923c,#ea580c);color:#fff;font-size:30px;line-height:1;border-radius:50%;box-shadow:0 6px 16px rgba(234,88,12,.4);padding:0;}
+#tabbar .tab-add:active{transform:scale(.94);}
+body.noscroll{overflow:hidden;}
+.modal.sheet{align-items:flex-end;padding:0;}
+.modal-box.sheet-box{max-width:640px;width:100%;height:94vh;max-height:94vh;border-radius:18px 18px 0 0;overflow-y:auto;padding:14px 14px calc(14px + env(safe-area-inset-bottom));}
+.sheet-head{display:flex;justify-content:flex-end;margin-bottom:6px;}
+.sheet-box #sec-form{box-shadow:none;border:none;margin:0;padding:0;background:transparent;}
+#billLightbox .lb-box{display:flex;flex-direction:column;gap:12px;align-items:center;max-width:96vw;}
+#billLightbox img{max-width:94vw;max-height:76vh;border-radius:12px;background:#fff;}
 </style>
 </head>
 <body>
@@ -162,7 +179,7 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
   </header>
 
   <!-- XE -->
-  <section class="card" id="sec-vehicle">
+  <section class="card" id="sec-vehicle" data-tab="overview">
     <h2>Xe của tôi</h2>
     <div class="row">
       <select id="vehicleSelect" aria-label="Chọn xe"></select>
@@ -196,6 +213,9 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
   </section>
 
   <!-- FORM BẢN GHI -->
+  <div id="entryModal" class="modal sheet hidden">
+    <div class="modal-box sheet-box">
+      <div class="sheet-head"><button type="button" id="btnCloseEntry" class="secondary small">Đóng</button></div>
   <section class="card" id="sec-form">
     <h2 id="formTitle">Thêm bản ghi</h2>
     <form id="entryForm" novalidate>
@@ -245,9 +265,11 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
       </div>
     </form>
   </section>
+    </div>
+  </div>
 
   <!-- THỐNG KÊ -->
-  <section class="card" id="sec-stats">
+  <section class="card" id="sec-stats" data-tab="overview">
     <h2>Thống kê</h2>
     <div class="stat-grid">
       <div class="stat"><div class="v" id="statMonth">0 đ</div><div class="l">Chi tháng này</div></div>
@@ -261,7 +283,7 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
   </section>
 
   <!-- DANH SÁCH -->
-  <section class="card" id="sec-list">
+  <section class="card" id="sec-list" data-tab="history">
     <h2>Lịch sử chăm xe</h2>
     <div class="filters">
       <select id="filterJob" aria-label="Lọc theo loại">
@@ -280,7 +302,7 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
   </section>
 
   <!-- BÁO CÁO -->
-  <section class="card" id="sec-report">
+  <section class="card" id="sec-report" data-tab="report">
     <h2>Xuất báo cáo</h2>
     <div class="row">
       <button id="btnExportImg" type="button" class="secondary">Xuất ảnh</button>
@@ -298,6 +320,21 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
   </section>
 
   <footer>Nhật ký xe — dữ liệu lưu trên máy này (offline 100%)</footer>
+</div>
+
+<nav id="tabbar">
+  <button type="button" data-tabbtn="overview" class="active">Tổng quan</button>
+  <button type="button" data-tabbtn="history">Lịch sử</button>
+  <button type="button" id="tabAdd" class="tab-add" aria-label="Thêm bản ghi">+</button>
+  <button type="button" data-tabbtn="report">Báo cáo</button>
+</nav>
+
+<!-- LIGHTBOX ANH BILL -->
+<div id="billLightbox" class="modal hidden">
+  <div class="lb-box">
+    <img id="billLbImg" alt="Ảnh bill">
+    <button type="button" id="billLbClose" class="secondary">Đóng</button>
+  </div>
 </div>
 
 <!-- MODAL XE -->
@@ -808,8 +845,36 @@ function renderAmtChips(){
   });
 }
 function billHtml(src){
-  return '<div class="billwrap"><button type="button" class="billtoggle secondary small">Xem ảnh bill</button>'+
-    '<img class="bill hidden" src="'+src+'" alt="Ảnh bill" loading="lazy"></div>';
+  return '<div class="billwrap"><button type="button" class="billtoggle secondary small" data-src="'+src+'">Xem ảnh bill</button></div>';
+}
+/* ---------- menu tab + popup ---------- */
+var currentTab = 'overview';
+function switchTab(name){
+  currentTab = name;
+  var secs = document.querySelectorAll('[data-tab]');
+  for(var i=0;i<secs.length;i++) secs[i].classList.toggle('active', secs[i].getAttribute('data-tab')===name);
+  var btns = document.querySelectorAll('#tabbar [data-tabbtn]');
+  for(var j=0;j<btns.length;j++) btns[j].classList.toggle('active', btns[j].getAttribute('data-tabbtn')===name);
+  try{ window.scrollTo(0,0); }catch(e){}
+}
+function openEntryModal(){
+  resetEntryForm();
+  $('entryModal').classList.remove('hidden');
+  document.body.classList.add('noscroll');
+}
+function closeEntryModal(){
+  $('entryModal').classList.add('hidden');
+  document.body.classList.remove('noscroll');
+}
+function openBillLightbox(src){
+  $('billLbImg').src = src;
+  $('billLightbox').classList.remove('hidden');
+  document.body.classList.add('noscroll');
+}
+function closeBillLightbox(){
+  $('billLightbox').classList.add('hidden');
+  $('billLbImg').removeAttribute('src');
+  if($('entryModal').classList.contains('hidden')) document.body.classList.remove('noscroll');
 }
 /* ---------- OCR: doc so tien tu anh bill ---------- */
 var ocrRunning = false;
@@ -1021,6 +1086,8 @@ function saveEntry(ev){
   try{ save(); }catch(e){ return; }
   resetEntryForm();
   renderAll();
+  closeEntryModal();
+  switchTab('history');
 }
 function editEntry(id){
   var e = db.entries.find(function(x){return x.id===id;});
@@ -1053,7 +1120,8 @@ function editEntry(id){
   updateGearOilWrap();
   updateAmountPreview();
   renderTagChips();
-  $('sec-form').scrollIntoView({behavior:'smooth', block:'start'});
+  $('entryModal').classList.remove('hidden');
+  document.body.classList.add('noscroll');
 }
 async function deleteEntry(id){
   var e = db.entries.find(function(x){return x.id===id;});
@@ -1118,11 +1186,7 @@ function renderList(){
   });
   box.innerHTML = html;
   box.querySelectorAll('.billtoggle').forEach(function(btn){
-    btn.onclick = function(){
-      var img = btn.parentNode.querySelector('img.bill');
-      var isHidden = img.classList.toggle('hidden');
-      btn.textContent = isHidden ? 'Xem ảnh bill' : 'Thu gọn ảnh bill';
-    };
+    btn.onclick = function(){ openBillLightbox(btn.getAttribute('data-src')); };
   });
   box.querySelectorAll('.entry').forEach(function(el){
     var id = el.getAttribute('data-id');
@@ -1441,7 +1505,8 @@ function init(){
   $('btnSaveKm').onclick = saveKmToVehicle;
   /* form */
   $('entryForm').onsubmit = saveEntry;
-  $('btnCancelEntry').onclick = resetEntryForm;
+  $('btnCancelEntry').onclick = function(){ resetEntryForm(); closeEntryModal(); };
+  $('btnCloseEntry').onclick = function(){ resetEntryForm(); closeEntryModal(); };
   $('fAmount').oninput = function(){ updateAmountPreview(); renderAmtChips(); };
   renderAmtChips();
   $('fJob').onchange = updateGearOilWrap;
@@ -1471,6 +1536,14 @@ function init(){
   });
   renderAll();
   updateGearOilWrap();
+  var tabbtns = document.querySelectorAll('#tabbar [data-tabbtn]');
+  for(var ti=0;ti<tabbtns.length;ti++){
+    (function(b){ b.onclick = function(){ switchTab(b.getAttribute('data-tabbtn')); }; })(tabbtns[ti]);
+  }
+  $('tabAdd').onclick = openEntryModal;
+  $('billLbClose').onclick = closeBillLightbox;
+  $('billLightbox').onclick = function(ev){ if(ev.target===$('billLightbox')) closeBillLightbox(); };
+  switchTab('overview');
 }
 
 document.addEventListener('DOMContentLoaded', init);
