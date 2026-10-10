@@ -231,6 +231,10 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
       <div class="row hidden" id="billRemoveWrap" style="margin-top:6px;">
         <button type="button" id="billRemove" class="secondary small">Gỡ ảnh</button>
       </div>
+      <div class="hidden" id="ocrWrap" style="margin-top:8px;">
+        <button type="button" id="btnOcr" class="secondary small">Đọc số tiền từ ảnh</button>
+        <div id="ocrResult" class="preview hidden" style="margin-top:8px;"></div>
+      </div>
       <label id="fGearOilWrap" class="hidden" style="font-weight:600;">
         <input type="checkbox" id="fGearOil" style="width:auto;min-height:0;"> Đã thay nhớt láp (xe tay ga)
       </label>
@@ -716,6 +720,7 @@ function resetEntryForm(){
   $('amountPreview').textContent = '';
   $('billPreview').innerHTML = '';
   $('billRemoveWrap').classList.add('hidden');
+  hideOcrWrap();
   $('formError').classList.add('hidden');
   $('btnCancelEntry').classList.add('hidden');
   $('btnSaveEntry').textContent = 'Lưu bản ghi';
@@ -785,6 +790,129 @@ function billHtml(src){
   return '<div class="billwrap"><button type="button" class="billtoggle secondary small">Xem ảnh bill</button>'+
     '<img class="bill hidden" src="'+src+'" alt="Ảnh bill" loading="lazy"></div>';
 }
+/* ---------- OCR: doc so tien tu anh bill ---------- */
+var ocrRunning = false;
+function loadTesseractJs(){
+  return new Promise(function(res, rej){
+    if(window.Tesseract) return res();
+    var urls = [
+      'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js',
+      'https://unpkg.com/tesseract.js@5/dist/tesseract.min.js'
+    ];
+    (function next(i){
+      if(i>=urls.length) return rej(new Error('net'));
+      var s = document.createElement('script');
+      s.src = urls[i];
+      s.onload = function(){ res(); };
+      s.onerror = function(){ if(s.parentNode) s.parentNode.removeChild(s); next(i+1); };
+      document.head.appendChild(s);
+    })(0);
+  });
+}
+function parseOcrAmount(s){
+  s = String(s).replace(/[^\d.,]/g,'');
+  if(!s) return NaN;
+  if(/^\d{1,3}(?:[.,]\d{3})+$/.test(s)) return parseInt(s.replace(/[.,]/g,''),10);
+  if(/^\d+$/.test(s)) return parseInt(s,10);
+  var li = Math.max(s.lastIndexOf('.'), s.lastIndexOf(','));
+  if(li<0) return NaN;
+  var n = parseFloat(s.slice(0,li).replace(/[.,]/g,'')+'.'+s.slice(li+1).replace(/[.,]/g,''));
+  return isNaN(n) ? NaN : Math.round(n);
+}
+function extractAmountFromText(text){
+  var t = String(text||'');
+  var m, v;
+  m = t.match(/(?:vnd|und|vnp?|vn[d\u0111])\s*([0-9][0-9\s.,]*)/i);
+  if(m){ v = parseOcrAmount(m[1]); if(!isNaN(v)&&v>0) return v; }
+  m = t.match(/(?:s\u1ed1 ti\u1ec1n|so tien|sotien|amount|t\u1ed5ng c\u1ed9ng|tong cong|t\u1ed5ng|tong|thanh to\u00e1n|thanh toan)[:\s]*([0-9][0-9\s.,]*)/i);
+  if(m){ v = parseOcrAmount(m[1]); if(!isNaN(v)&&v>0) return v; }
+  var all = t.match(/\d{1,3}(?:[.,]\d{3})+(?![\d.,])/g)||[];
+  var best = NaN;
+  all.forEach(function(a){
+    v = parseOcrAmount(a);
+    if(!isNaN(v)&&(isNaN(best)||v>best)) best = v;
+  });
+  return best;
+}
+function ocrSetResult(html){
+  var r = $('ocrResult');
+  if(!r) return;
+  r.classList.remove('hidden');
+  r.innerHTML = html;
+}
+function startOcr(){
+  if(ocrRunning) return;
+  var btn = $('btnOcr');
+  if(!btn || typeof pendingBill!=='string' || !pendingBill){ ocrSetResult('Chưa có ảnh bill để đọc.'); return; }
+  ocrRunning = true;
+  btn.disabled = true;
+  var label = 'Đọc số tiền từ ảnh';
+  btn.textContent = 'Đang tải bộ đọc...';
+  var done = false;
+  function finish(){ done = true; ocrRunning = false; btn.disabled = false; btn.textContent = label; }
+  var timer = setTimeout(function(){
+    if(done) return;
+    finish();
+    ocrSetResult('Đọc ảnh quá lâu. Bạn nhập tay giúp mình nhé.');
+  }, 90000);
+  loadTesseractJs().then(function(){
+    if(done) return null;
+    return window.Tesseract.recognize(pendingBill, 'eng', {
+      logger: function(lg){
+        if(!done && lg && lg.status==='recognizing text'){
+          btn.textContent = 'Đang đọc ảnh... ' + Math.round((lg.progress||0)*100) + '%';
+        }
+      }
+    });
+  }).then(function(out){
+    if(done || !out) return;
+    clearTimeout(timer);
+    var amount = extractAmountFromText(out.data && out.data.text);
+    finish();
+    if(!isNaN(amount) && amount>0){
+      try{ localStorage.setItem('nhatkyxe.ocrReady','1'); }catch(e){}
+      var box = $('ocrResult');
+      box.classList.remove('hidden');
+      box.innerHTML = '';
+      var sp = document.createElement('span');
+      sp.innerHTML = 'Nhận diện: <b>'+fmtMoney(amount)+'</b>';
+      var use = document.createElement('button');
+      use.type = 'button';
+      use.className = 'secondary small';
+      use.textContent = 'Dùng số này';
+      use.style.marginLeft = '8px';
+      use.onclick = function(){
+        $('fAmount').value = String(amount);
+        updateAmountPreview();
+        renderAmtChips();
+        box.classList.add('hidden');
+      };
+      box.appendChild(sp);
+      box.appendChild(use);
+    }else{
+      ocrSetResult('Không nhận diện được số tiền. Bạn nhập tay nhé.');
+    }
+  }).catch(function(){
+    if(done) return;
+    clearTimeout(timer);
+    finish();
+    ocrSetResult('Cần mạng để tải bộ đọc ảnh lần đầu. Bạn nhập tay nhé.');
+  });
+}
+function showOcrWrap(auto){
+  var w = $('ocrWrap');
+  if(!w) return;
+  w.classList.remove('hidden');
+  var r = $('ocrResult'); r.classList.add('hidden'); r.innerHTML = '';
+  var btn = $('btnOcr'); btn.disabled = false; btn.textContent = 'Đọc số tiền từ ảnh';
+  if(auto){ try{ if(localStorage.getItem('nhatkyxe.ocrReady')==='1') startOcr(); }catch(e){} }
+}
+function hideOcrWrap(){
+  var w = $('ocrWrap');
+  if(!w) return;
+  w.classList.add('hidden');
+  var r = $('ocrResult'); r.classList.add('hidden'); r.innerHTML = '';
+}
 function processImageFile(file){
   return new Promise(function(resolve, reject){
     if(!file) return reject(new Error('empty'));
@@ -814,6 +942,7 @@ function onBillSelect(){
     pendingBill = dataUrl;
     $('billPreview').innerHTML = '<img src="'+dataUrl+'" alt="Ảnh bill">';
     $('billRemoveWrap').classList.remove('hidden');
+    showOcrWrap(true);
     if(selectedTags.indexOf('Bill ngân hàng')<0){
       selectedTags.push('Bill ngân hàng');
       renderTagChips();
@@ -888,11 +1017,14 @@ function editEntry(id){
   $('fNote').value = e.note||'';
   $('fBill').value = '';
   if(e.billImg){
+    pendingBill = e.billImg;
     $('billPreview').innerHTML = '<img src="'+e.billImg+'" alt="Ảnh bill">';
     $('billRemoveWrap').classList.remove('hidden');
+    showOcrWrap(false);
   }else{
     $('billPreview').innerHTML = '';
     $('billRemoveWrap').classList.add('hidden');
+    hideOcrWrap();
   }
   $('formError').classList.add('hidden');
   $('btnCancelEntry').classList.remove('hidden');
@@ -1244,7 +1376,9 @@ function init(){
     $('billPreview').innerHTML = '';
     $('fBill').value = '';
     $('billRemoveWrap').classList.add('hidden');
+    hideOcrWrap();
   };
+  $('btnOcr').onclick = function(){ startOcr(); };
   $('btnAddTag').onclick = addCustomTag;
   /* loc */
   $('filterJob').onchange = function(){ renderList(); renderReport(); };
