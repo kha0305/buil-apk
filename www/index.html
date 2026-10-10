@@ -287,6 +287,14 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
       <button id="btnExportExcel" type="button">Xuất Excel</button>
     </div>
     <div id="reportArea"></div>
+    <hr class="divider">
+    <h3>Sao lưu &amp; khôi phục</h3>
+    <p class="hint">Sao lưu dữ liệu ra file để giữ an toàn khi đổi máy hoặc cài lại app.</p>
+    <div class="row">
+      <button id="btnBackup" type="button" class="secondary">Sao lưu dữ liệu</button>
+      <button id="btnRestore" type="button" class="secondary">Khôi phục dữ liệu</button>
+      <input type="file" id="fRestore" accept=".json,application/json" class="hidden">
+    </div>
   </section>
 
   <footer>Nhật ký xe — dữ liệu lưu trên máy này (offline 100%)</footer>
@@ -347,6 +355,7 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
 'use strict';
 /* Nhat ky xe - ung dung offline, du lieu luu trong localStorage key nhatkyxe.v1 */
 var LS_KEY = 'nhatkyxe.v1';
+var SCHEMA_VERSION = 1;
 var BRANDS = ['Honda','Yamaha','Suzuki','SYM','Piaggio','Vespa','Kymco','Kawasaki','KTM','BMW Motorrad','Ducati','Triumph','Harley-Davidson','VinFast','Yadea','Dat Bike','Hãng khác'];
 var JOB_TYPES = ['Đổ xăng','Thay nhớt','Bảo dưỡng','Sửa chữa','Rửa xe','Việc khác'];
 var SUGGEST_TAGS = ['Đi xa','Đổ đầy bình','Ưu tiên','Đại lý','Tự làm','Bill ngân hàng'];
@@ -419,21 +428,33 @@ function parseMoney(s){
 /* ---------- state ---------- */
 var db = null;
 function defaultDb(){
-  return { vehicles:[], entries:[], customTags:[], selectedVehicleId:'all' };
+  return { v: SCHEMA_VERSION, vehicles:[], entries:[], customTags:[], selectedVehicleId:'all' };
+}
+function migrateDb(d){
+  if(!d || typeof d!=='object') return null;
+  if(!Array.isArray(d.vehicles) || !Array.isArray(d.entries)) return null;
+  if(typeof d.v !== 'number') d.v = 1;
+  if(!Array.isArray(d.customTags)) d.customTags = [];
+  if(!('selectedVehicleId' in d)) d.selectedVehicleId = 'all';
+  d.v = SCHEMA_VERSION;
+  return d;
 }
 function load(){
-  try{
-    var raw = localStorage.getItem(LS_KEY);
-    if(!raw) return defaultDb();
-    var d = JSON.parse(raw);
-    if(!d || !Array.isArray(d.vehicles) || !Array.isArray(d.entries)) return defaultDb();
-    if(!Array.isArray(d.customTags)) d.customTags = [];
-    if(!('selectedVehicleId' in d)) d.selectedVehicleId = 'all';
-    return d;
-  }catch(e){ return defaultDb(); }
+  var raw = null;
+  try{ raw = localStorage.getItem(LS_KEY); }catch(e){ raw = null; }
+  if(!raw) return defaultDb();
+  var d = null;
+  try{ d = migrateDb(JSON.parse(raw)); }catch(e){ d = null; }
+  if(d) return d;
+  try{ localStorage.setItem(LS_KEY+'.corrupt.'+Date.now(), raw); }catch(e){}
+  setTimeout(function(){
+    try{ alert('D\u1eef li\u1ec7u l\u01b0u tr\u00ean m\u00e1y b\u1ecb l\u1ed7i n\u00ean app ph\u1ea3i t\u1ea1o m\u1edbi. B\u1ea3n c\u0169 \u0111\u00e3 \u0111\u01b0\u1ee3c gi\u1eef l\u1ea1i \u0111\u1ec3 c\u1ee9u.'); }catch(e){}
+  }, 600);
+  return defaultDb();
 }
 function save(){
   try{
+    db.v = SCHEMA_VERSION;
     localStorage.setItem(LS_KEY, JSON.stringify(db));
   }catch(e){
     alert('Không lưu được dữ liệu: bộ nhớ máy đã đầy. Hãy xóa bớt ảnh bill cũ rồi thử lại.');
@@ -1300,6 +1321,61 @@ function exportExcel(){
     alert('Không xuất được file Excel. Hãy thử lại.');
   }
 }
+function downloadTextFile(fname, text){
+  try{
+    var blob = new Blob([text], {type:'application/json'});
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(function(){ URL.revokeObjectURL(a.href); a.remove(); }, 1500);
+  }catch(e){ alert('Không tải được file. Hãy thử lại.'); }
+}
+function backupFileName(){
+  var d = new Date();
+  function p(n){ return (n<10?'0':'')+n; }
+  return 'sao-luu-nhat-ky-xe-'+d.getFullYear()+p(d.getMonth()+1)+p(d.getDate())+'.json';
+}
+function backupData(){
+  try{
+    var raw = localStorage.getItem(LS_KEY) || '{}';
+    var envelope = { app:'nhatkyxe', version:SCHEMA_VERSION, exportedAt:new Date().toISOString(), data:JSON.parse(raw) };
+    var json = JSON.stringify(envelope);
+    var fname = backupFileName();
+    if(isNativeApp()){
+      var b64 = btoa(unescape(encodeURIComponent(json)));
+      saveFileNative(fname, b64, function(ok){ if(!ok) downloadTextFile(fname, json); });
+    }else{
+      downloadTextFile(fname, json);
+    }
+  }catch(e){ alert('Không sao lưu được. Hãy thử lại.'); }
+}
+function restoreData(file){
+  if(!file) return;
+  var rd = new FileReader();
+  rd.onload = function(){
+    var obj;
+    try{ obj = JSON.parse(rd.result); }
+    catch(e){ obj = null; }
+    var migrated = null;
+    try{ migrated = migrateDb(obj && obj.data); }catch(e){ migrated = null; }
+    if(!obj || obj.app!=='nhatkyxe' || !migrated){
+      alert('File sao lưu không hợp lệ.');
+      return;
+    }
+    askConfirm('Khôi phục dữ liệu', 'Sẽ GHI ĐÈ toàn bộ dữ liệu hiện tại trên máy này. Tiếp tục?', 'Khôi phục').then(function(ok){
+      if(!ok) return;
+      try{
+        localStorage.setItem(LS_KEY, JSON.stringify(migrated));
+        alert('Khôi phục xong. App sẽ tải lại.');
+        location.reload();
+      }catch(e){ alert('Không ghi được dữ liệu. Hãy thử lại.'); }
+    });
+  };
+  rd.onerror = function(){ alert('Không đọc được file.'); };
+  rd.readAsText(file);
+}
 function exportImg(){
   var node = $('reportArea');
   try{
@@ -1387,6 +1463,9 @@ function init(){
   /* bao cao */
   $('btnExportImg').onclick = exportImg;
   $('btnExportExcel').onclick = exportExcel;
+  $('btnBackup').onclick = backupData;
+  $('btnRestore').onclick = function(){ $('fRestore').click(); };
+  $('fRestore').onchange = function(){ restoreData(this.files && this.files[0]); this.value=''; };
   window.addEventListener('resize', function(){
     renderStats();
   });
