@@ -116,6 +116,8 @@ canvas#monthChart{width:100%;height:220px;display:block;}
 .entry .eactions{display:flex;gap:8px;margin-top:10px;}
 .entry .eactions button{flex:1;}
 .entry img.bill{max-width:100%;height:auto;border-radius:10px;margin-top:10px;border:1px solid var(--border);}
+.billwrap{margin-top:10px;}
+.billwrap img.bill{margin-top:8px;}
 .empty{padding:28px 12px;text-align:center;color:var(--muted);font-size:14px;}
 /* báo cáo */
 #reportArea{border:1px solid var(--border);border-radius:12px;padding:16px;margin-top:12px;
@@ -210,7 +212,7 @@ footer{margin-top:24px;text-align:center;color:var(--muted);font-size:12px;}
       <input type="text" id="fAmount" inputmode="decimal" placeholder="Ví dụ: 80k, 1.5m, 200000" autocomplete="off">
       <div id="amountPreview" class="preview"></div>
       <div class="hint">Nhập tắt: 1k = 1.000 đ, 1m = 1.000.000 đ, 1b = 1.000.000.000 đ</div>
-      <div class="chips" id="amtChips"><span class="chip" data-amt="20k">20k</span><span class="chip" data-amt="50k">50k</span><span class="chip" data-amt="100k">100k</span><span class="chip" data-amt="200k">200k</span><span class="chip" data-amt="500k">500k</span><span class="chip" data-amt="1m">1tr</span></div>
+      <div class="chips" id="amtChips"></div>
       <label for="fLiters">Số lít (chỉ cần khi đổ xăng)</label>
       <input type="number" id="fLiters" min="0" step="0.01" placeholder="Ví dụ: 3.5">
       <label for="fOdo">Công-tơ-mét (km)</label>
@@ -733,6 +735,56 @@ function updateAmountPreview(){
   else if(n<=0) box.textContent = 'Số tiền phải lớn hơn 0.';
   else box.textContent = 'Sẽ lưu: ' + fmtMoney(n);
 }
+
+function trimNum(n){ return (Math.round(n*100)/100).toString(); }
+function fmtShortAmt(v){
+  if(v>=1000000) return trimNum(v/1000000)+'tr';
+  if(v>=1000) return trimNum(v/1000)+'k';
+  return String(v);
+}
+function amtValueStr(v){
+  if(v>=1000000) return trimNum(v/1000000)+'m';
+  if(v>=1000) return trimNum(v/1000)+'k';
+  return String(v);
+}
+function renderAmtChips(){
+  var box = $('amtChips');
+  if(!box) return;
+  var defs = null;
+  var m = $('fAmount').value.trim().match(/^(\d{1,4})$/);
+  if(m){
+    var n = parseInt(m[1],10);
+    if(n>0){
+      defs = [
+        {label: fmtShortAmt(n*10000), amt: amtValueStr(n*10000)},
+        {label: fmtShortAmt(n*100000), amt: amtValueStr(n*100000)},
+        {label: fmtShortAmt(n*1000000), amt: amtValueStr(n*1000000)}
+      ];
+    }
+  }
+  if(!defs){
+    defs = [
+      {label:'20k',amt:'20k'},{label:'50k',amt:'50k'},{label:'100k',amt:'100k'},
+      {label:'200k',amt:'200k'},{label:'500k',amt:'500k'},{label:'1tr',amt:'1m'}
+    ];
+  }
+  box.innerHTML = '';
+  defs.forEach(function(d){
+    var s = document.createElement('span');
+    s.className = 'chip';
+    s.textContent = d.label;
+    s.onclick = function(){
+      $('fAmount').value = d.amt;
+      updateAmountPreview();
+      renderAmtChips();
+    };
+    box.appendChild(s);
+  });
+}
+function billHtml(src){
+  return '<div class="billwrap"><button type="button" class="billtoggle secondary small">Xem ảnh bill</button>'+
+    '<img class="bill hidden" src="'+src+'" alt="Ảnh bill" loading="lazy"></div>';
+}
 function processImageFile(file){
   return new Promise(function(resolve, reject){
     if(!file) return reject(new Error('empty'));
@@ -762,6 +814,10 @@ function onBillSelect(){
     pendingBill = dataUrl;
     $('billPreview').innerHTML = '<img src="'+dataUrl+'" alt="Ảnh bill">';
     $('billRemoveWrap').classList.remove('hidden');
+    if(selectedTags.indexOf('Bill ngân hàng')<0){
+      selectedTags.push('Bill ngân hàng');
+      renderTagChips();
+    }
   }).catch(function(){
     alert('Không đọc được ảnh này. Hãy chọn file ảnh khác.');
     $('fBill').value = '';
@@ -902,12 +958,19 @@ function renderList(){
       (meta.length?'<div class="emeta">'+meta.join(' · ')+'</div>':'')+
       (e.note?'<div class="emeta">'+esc(e.note)+'</div>':'')+
       (tags?'<div class="etags">'+tags+'</div>':'')+
-      (e.billImg?'<img class="bill" src="'+e.billImg+'" alt="Ảnh bill" loading="lazy">':'')+
+      (e.billImg?billHtml(e.billImg):'')+
       '<div class="eactions"><button type="button" class="secondary small" data-act="edit">Sửa</button>'+
       '<button type="button" class="danger small" data-act="del">Xóa</button></div>'+
       '</div>';
   });
   box.innerHTML = html;
+  box.querySelectorAll('.billtoggle').forEach(function(btn){
+    btn.onclick = function(){
+      var img = btn.parentNode.querySelector('img.bill');
+      var isHidden = img.classList.toggle('hidden');
+      btn.textContent = isHidden ? 'Xem ảnh bill' : 'Thu gọn ảnh bill';
+    };
+  });
   box.querySelectorAll('.entry').forEach(function(el){
     var id = el.getAttribute('data-id');
     el.querySelector('[data-act="edit"]').onclick = function(){ editEntry(id); };
@@ -1171,18 +1234,8 @@ function init(){
   /* form */
   $('entryForm').onsubmit = saveEntry;
   $('btnCancelEntry').onclick = resetEntryForm;
-  $('fAmount').oninput = updateAmountPreview;
-  (function(){
-    var box = $('amtChips');
-    if(!box) return;
-    var cs = box.querySelectorAll('.chip');
-    for(var i=0;i<cs.length;i++){
-      cs[i].onclick = function(){
-        $('fAmount').value = this.getAttribute('data-amt');
-        updateAmountPreview();
-      };
-    }
-  })();
+  $('fAmount').oninput = function(){ updateAmountPreview(); renderAmtChips(); };
+  renderAmtChips();
   $('fJob').onchange = updateGearOilWrap;
   $('fVehicle').onchange = updateGearOilWrap;
   $('fBill').onchange = onBillSelect;
