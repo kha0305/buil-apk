@@ -2231,6 +2231,12 @@ function init(){
   }
   $('billLbClose').onclick = closeBillLightbox;
   $('billLightbox').onclick = function(ev){ if(ev.target===$('billLightbox')) closeBillLightbox(); };
+  $('entryModal').addEventListener('click', function(ev){
+    if(ev.target===$('entryModal')){ resetEntryForm(); closeEntryModal(); }
+  });
+  $('vehicleModal').addEventListener('click', function(ev){
+    if(ev.target===$('vehicleModal')) closeVehicleModal();
+  });
   switchTab('overview');
 }
 
