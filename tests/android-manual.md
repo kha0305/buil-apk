@@ -11,3 +11,17 @@ Chạy sau khi có APK từ `docs/android-build.md`.
 6. Tắt app hẳn, mở lại: ghi chú vẫn còn (WAL + persist).
 7. Xoay màn hình / mở bàn phím: toolbar không bị che, ô nhập không bị bàn phím đè.
 8. Vuốt danh sách dài (tạo ~50 ghi chú): không giật rõ, không crash.
+
+## Tag và kéo thả (thêm ở bản v2)
+
+9. Trong editor, ô tag: gõ "Học" rồi Enter thì chip Học hiện; gõ lại "học"
+   thì không tạo tag trùng; thoát editor rồi mở lại vẫn đủ tag.
+10. Nhóm tag: note có tag Học và Thi hiện ở cả hai nhóm; note không có tag
+    nằm ở nhóm Chưa gắn tag.
+11. Kéo thả bằng tay: nhấn giữ một note khoảng nửa giây thì note nhấc lên
+    (bản sao bay theo tay), kéo tới nhóm tag khác thì nhóm đó sáng lên,
+    thả ra thì note mang tag đó. Cuộn danh sách bằng tay vẫn bình thường
+    (vuốt nhanh không nhấc note lên).
+12. Kéo một note vào nhóm Chưa gắn tag thì gỡ hết tag của note đó.
+13. Đóng app hẳn, mở lại: tag và nhóm vẫn còn (migration v2 không mất
+    dữ liệu cũ).

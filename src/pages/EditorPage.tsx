@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { COLOURS, type NewNote, type Note } from "../lib/types";
-import { deleteNote, togglePin, updateNote } from "../services/notesApi";
+import { deleteNote, setNoteTags, togglePin, updateNote } from "../services/notesApi";
 
 type Props = {
   note: Note;
@@ -16,6 +16,13 @@ export default function EditorPage({ note, onClose, onSaved }: Props) {
   const composingRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [colour, setColour] = useState(note.colour);
+  const [tags, setTags] = useState<string[]>(note.tags);
+  const [tagInput, setTagInput] = useState("");
+
+  // Mở note khác thì đồng bộ lại tag (cùng editor, khác id).
+  useEffect(() => {
+    setTags(note.tags);
+  }, [note.id]);
 
   // Rời editor thì hủy lịch lưu đang chờ: ref đã tháo, lưu lúc này sẽ ghi đè
   // tiêu đề/nội dung bằng chuỗi rỗng. Đánh đổi: mất tối đa 800ms gõ cuối.
@@ -56,6 +63,27 @@ export default function EditorPage({ note, onClose, onSaved }: Props) {
     onSaved(saved);
   };
 
+  // Tag lưu ngay khi thêm/gỡ (lấy kết quả từ Rust làm chuẩn, không đoán).
+  const saveTags = async (next: string[]) => {
+    const saved = await setNoteTags(note.id, next);
+    setTags(saved.tags);
+    onSaved(saved);
+  };
+
+  const addTag = () => {
+    const name = tagInput.trim();
+    if (!name || tags.some((t) => t.toLowerCase() === name.toLowerCase())) {
+      setTagInput("");
+      return;
+    }
+    setTagInput("");
+    void saveTags([...tags, name]);
+  };
+
+  const removeTag = (name: string) => {
+    void saveTags(tags.filter((t) => t !== name));
+  };
+
   const remove = async () => {
     if (!window.confirm("Xóa ghi chú này?")) return;
     await deleteNote(note.id);
@@ -91,6 +119,31 @@ export default function EditorPage({ note, onClose, onSaved }: Props) {
         defaultValue={note.title}
         onChange={scheduleSave}
       />
+      <div className="tag-editor">
+        <div className="tag-chips">
+          {tags.map((t) => (
+            <span key={t} className="tag-chip">
+              {t}
+              <button type="button" aria-label={`Gỡ tag ${t}`} onClick={() => removeTag(t)}>
+                ×
+              </button>
+            </span>
+          ))}
+        </div>
+        <input
+          className="tag-input"
+          type="text"
+          placeholder="Thêm tag rồi bấm Enter..."
+          value={tagInput}
+          onChange={(e) => setTagInput(e.currentTarget.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              addTag();
+            }
+          }}
+        />
+      </div>
       <textarea
         ref={contentRef}
         className="content-input"

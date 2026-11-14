@@ -93,12 +93,38 @@ Lệnh: `npx tauri build` (lần đầu biên dịch release 9m 53s).
 - Workflow GitHub Actions: YAML parse OK (`python yaml.safe_load`), job
   `build-android`. Chưa chạy thật trên GitHub Actions.
 
+## Đã chạy và đậu — bản v2 tag (14/11/2026, thêm sau bản đầu)
+
+### 5. Tag + nhóm tag — ĐẬU 15/15 (9 cũ + 6 mới)
+
+Lệnh: `cargo test --manifest-path src-tauri/Cargo.toml` (chạy lại sau khi thêm
+`src-tauri/src/tags.rs`, migration v2 `tags` + `note_tags`, `PRAGMA user_version = 2`).
+
+6 test mới, tất cả đậu:
+`set_tags_creates_tags_and_returns_them`,
+`note_appears_under_two_tags` (tag Học đếm 2 note, tag Thi đếm 1),
+`removing_all_tags_clears_note_tags_but_keeps_tag_names`,
+`duplicate_names_collapse_case_insensitively` ("học"/"HỌC"/" Học " gộp thành một),
+`set_tags_on_missing_note_errors`,
+`migration_keeps_old_notes` (database cũ kiểu v1, chưa có bảng tags, mở bằng
+`open_db` vẫn giữ đủ note, `user_version` lên 2).
+
+9 test cũ vẫn đậu, không sửa test cũ.
+
+### 6. Frontend build bản v2 — ĐẬU
+
+Lệnh: `npm run build` (tsc + vite build, 308ms, 25 modules, js 231,20 kB,
+css 3,70 kB). Chưa test được trên VM: kéo thả bằng tay trên điện thoại thật,
+nút Back, safe-area, gõ Gboard tiếng Việt trong ô tag, hiệu năng danh sách dài.
+
 ## Chưa test được — cần máy Windows + điện thoại thật của kha
 
 - Build Android (`tauri android init/build`), ký APK, cài APK lên máy thật.
 - Tauri/IPC thật (invoke từ WebView), nút Back, bàn phím + gõ Gboard tiếng Việt,
   safe-area edge-to-edge, hiệu năng vuốt danh sách dài, chạy binary desktop
   (VM không có màn hình để mở WebView).
+- Kéo thả tag bằng tay trên điện thoại thật (nhấn giữ 400ms mới nhấc note lên,
+  thả vào nhóm tag để gắn, thả vào nhóm Chưa gắn tag để gỡ hết).
 - Chạy workflow GitHub Actions thật (cần push repo lên GitHub).
 
 Kế hoạch test tay trên điện thoại: xem `tests/android-manual.md`.

@@ -7,9 +7,16 @@ Mục đích: test AI làm app tới đâu (nhất là UI / độ mượt).
 
 - Danh sách: tìm kiếm (tiếng Việt không phân biệt hoa/thường), ghim lên trước,
   nút + tạo ghi chú mới.
+- Tag: tag do người dùng tự tạo, không có tag sẵn; một note gắn được nhiều tag.
+  Danh sách nhóm note theo tag (một nhóm một tag + nhóm Chưa gắn tag), note
+  có nhiều tag hiện ở mỗi nhóm của nó. Kéo thả bằng Pointer Events: nhấn giữ
+  note ~400ms trên cảm ứng (chuột kéo ngay) rồi thả vào nhóm tag để gắn tag,
+  thả vào nhóm Chưa gắn tag để gỡ hết tag; cuộn trang vẫn bình thường vì
+  chỉ chặn cuộn khi đã nhấc note lên.
 - Editor: tiêu đề + nội dung bằng `<textarea>` uncontrolled, chọn màu,
   ghim/bỏ ghim, xóa, tự lưu sau khi ngừng gõ 800ms (không lưu khi đang gõ
-  Telex/VNI — có guard composition).
+  Telex/VNI — có guard composition). Ô nhập tag: gõ tên rồi bấm Enter để thêm,
+  bấm × để gỡ; đang gõ Telex thì Enter không thêm tag.
 - Nút Back Android: ở editor thì về danh sách, ở danh sách thì thoát app
   (dùng `onBackButtonPress()` của `@tauri-apps/api/app`, có từ Tauri 2.9.0).
 
@@ -17,17 +24,18 @@ Mục đích: test AI làm app tới đâu (nhất là UI / độ mượt).
 
 ```
 src/
-  lib/types.ts          # Note, NewNote, COLOURS
+  lib/types.ts          # Note, NewNote, Tag, COLOURS
   services/notesApi.ts  # API gọi Rust qua invoke, một file một nhóm API
   components/NoteCard.tsx
-  pages/ListPage.tsx
-  pages/EditorPage.tsx
+  pages/ListPage.tsx    # nhóm theo tag + kéo thả Pointer Events
+  pages/EditorPage.tsx  # ô nhập tag + autosave
   App.tsx               # điều hướng 2 màn + xử lý nút Back
   styles.css            # màu giấy ấm, safe-area, 100dvh
 src-tauri/
   src/lib.rs            # chỉ chứa #[tauri::command] mỏng + setup mở DB
   src/db.rs             # DbState, open_db, migration, helper lock/get_note/exec_one
   src/notes.rs          # lõi CRUD + 9 test
+  src/tags.rs           # list_tags/set_note_tags + 6 test
   capabilities/default.json   # chỉ core:default + core:app:allow-exit
 tests/                  # ghi chú test (test Rust nằm trong src-tauri/src/notes.rs)
 docs/

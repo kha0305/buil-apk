@@ -4,9 +4,10 @@
 //! - Tìm tiếng Việt: lọc bằng Rust `to_lowercase()` (Unicode-aware),
 //!   không dùng `LIKE` của SQLite (chỉ gập case ASCII).
 
-use crate::db::{db_err, exec_one, get_note, lock, now_millis, row_to_note, DbState, COLS};
+use crate::db::{all_tags_map, db_err, exec_one, get_note, lock, now_millis, row_to_note, DbState, COLS};
 use rusqlite::params;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -17,6 +18,8 @@ pub struct Note {
     pub colour: String,
     pub pinned: bool,
     pub updated_at: i64,
+    #[serde(default)]
+    pub tags: Vec<String>,
 }
 
 /// Đầu vào khi tạo/sửa: không có `id`/`updated_at` — Rust tự sinh.
@@ -30,7 +33,7 @@ pub struct NewNote {
 }
 
 pub fn list_notes(state: &DbState) -> Result<Vec<Note>, String> {
-    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = lock(state)?;
     let mut stmt = conn
         .prepare(&format!(
             "SELECT {COLS} FROM notes ORDER BY pinned DESC, updated_at DESC"
@@ -41,11 +44,21 @@ pub fn list_notes(state: &DbState) -> Result<Vec<Note>, String> {
         .map_err(db_err)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(db_err)?;
-    Ok(notes)
+    Ok(attach_tags(notes, &all_tags_map(&conn)?))
+}
+
+/// Gắn tag đã tải sẵn vào từng note (một câu SQL cho cả danh sách).
+fn attach_tags(mut notes: Vec<Note>, tags: &HashMap<i64, Vec<String>>) -> Vec<Note> {
+    for n in &mut notes {
+        if let Some(t) = tags.get(&n.id) {
+            n.tags = t.clone();
+        }
+    }
+    notes
 }
 
 pub fn create_note(state: &DbState, input: NewNote) -> Result<Note, String> {
-    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let conn = lock(state)?;
     let now = now_millis();
     conn.execute(
         "INSERT INTO notes (title, content, colour, pinned, updated_at)
@@ -61,29 +74,19 @@ pub fn create_note(state: &DbState, input: NewNote) -> Result<Note, String> {
         colour: input.colour,
         pinned: input.pinned,
         updated_at: now,
+        tags: vec![],
     })
 }
 
 pub fn update_note(state: &DbState, id: i64, input: NewNote) -> Result<Note, String> {
     let conn = lock(state)?;
     let now = now_millis();
-    let n = conn
-        .execute(
-            "UPDATE notes SET title=?1, content=?2, colour=?3, pinned=?4, updated_at=?5 WHERE id=?6",
-            params![input.title, input.content, input.colour, input.pinned as i64, now, id],
-        )
-        .map_err(db_err)?;
-    if n == 0 {
-        return Err("Note not found".into());
-    }
-    Ok(Note {
-        id,
-        title: input.title,
-        content: input.content,
-        colour: input.colour,
-        pinned: input.pinned,
-        updated_at: now,
-    })
+    exec_one(
+        &conn,
+        "UPDATE notes SET title=?1, content=?2, colour=?3, pinned=?4, updated_at=?5 WHERE id=?6",
+        &[&input.title, &input.content, &input.colour, &(input.pinned as i64), &now, &id],
+    )
+    .and_then(|_| get_note(&conn, id))
 }
 
 pub fn delete_note(state: &DbState, id: i64) -> Result<(), String> {
@@ -149,6 +152,7 @@ mod tests {
             colour: "pink".into(),
             pinned: true,
             updated_at: 1_792_000_000_000,
+            tags: vec!["Học".into()],
         };
         let json = serde_json::to_string(&n).unwrap();
         assert!(json.contains("\"updatedAt\":1792000000000"), "json = {json}");

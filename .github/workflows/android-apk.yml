@@ -70,6 +70,13 @@ jobs:
             npx tauri android init
           fi
 
+      # Build bản debug (đã ký bằng debug key, cài được lên điện thoại ngay).
+      # Bản release của Tauri 2.12 ra file *-unsigned.apk (chưa ký, không cài
+      # được) — workflow lần đầu 14/11/2026 chết ở bước đổi tên vì tìm sai tên
+      # file app-universal-release.apk trong khi file thật là
+      # app-universal-release-unsigned.apk (xem log job 132411264033, dòng
+      # "Finished 1 APK at: .../app-universal-release-unsigned.apk").
+      # Muốn bản release ký thật thì cần keystore riêng, làm sau khi test xong.
       - name: Build APK
         run: npx tauri android build --apk --debug
         env:
@@ -77,7 +84,9 @@ jobs:
 
       - name: Đổi tên APK universal
         run: |
-          cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk ghi-chu-0.1.0-debug.apk
+          cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk \
+             ghi-chu-0.1.0-debug.apk
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:

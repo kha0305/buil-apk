@@ -100,6 +100,15 @@ button.danger {
   border-radius: 12px;
   padding: 12px 14px;
   cursor: pointer;
+  /* Tay cuộn dọc bình thường; khi đã nhấc note lên thì JS chặn cuộn. */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.note-card.dragging {
+  opacity: 0.4;
 }
 
 .note-card h2 {
@@ -179,4 +188,97 @@ button.danger {
   font-size: 12px;
   margin: 8px 0 0;
   text-align: right;
+}
+
+/* Tag: chip nhỏ trên thẻ note, ô nhập tag trong editor, nhóm theo tag. */
+.tag-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.tag-chip {
+  background: #efe6cf;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.tag-chip button {
+  border: none;
+  background: none;
+  padding: 0 0 0 4px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.tag-editor {
+  margin-bottom: 10px;
+}
+
+.tag-input {
+  font: inherit;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  outline: none;
+  width: 100%;
+  margin-top: 8px;
+}
+
+.drag-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+
+.tag-group {
+  border: 1px dashed transparent;
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 12px;
+}
+
+.tag-group.drop-target {
+  border-color: var(--text);
+  background: #f3ead2;
+}
+
+.group-header {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  background: none;
+  border: none;
+  font-weight: 700;
+  padding: 6px 4px;
+  text-align: left;
+}
+
+.group-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 4px 8px;
+  margin: 0;
+}
+
+/* Bản sao bay theo ngón tay/chuột khi đang kéo; không chặn elementFromPoint. */
+.drag-clone {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  background: var(--card);
+  border: 1px solid var(--text);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-size: 14px;
+  max-width: 240px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
 }

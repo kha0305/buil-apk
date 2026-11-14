@@ -1,7 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { exit, onBackButtonPress } from "@tauri-apps/api/app";
-import type { Note } from "./lib/types";
-import { createNote, isTauri, listNotes, searchNotes, togglePin } from "./services/notesApi";
+import type { Note, Tag } from "./lib/types";
+import {
+  createNote,
+  isTauri,
+  listNotes,
+  listTags,
+  searchNotes,
+  setNoteTags,
+  togglePin,
+} from "./services/notesApi";
 import ListPage from "./pages/ListPage";
 import EditorPage from "./pages/EditorPage";
 import "./styles.css";
@@ -10,6 +18,7 @@ type View = { name: "list" } | { name: "editor"; note: Note };
 
 export default function App() {
   const [notes, setNotes] = useState<Note[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>({ name: "list" });
   const [error, setError] = useState("");
@@ -19,6 +28,7 @@ export default function App() {
   const reload = useCallback(async (q: string) => {
     try {
       setNotes(q.trim() ? await searchNotes(q) : await listNotes());
+      setTags(await listTags());
       setError("");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -83,12 +93,26 @@ export default function App() {
     if (viewRef.current.name === "editor") setView({ name: "editor", note: saved });
   };
 
+  // Kéo note vào nhóm tag: tag là tên nhóm, null là nhóm Chưa gắn tag (gỡ hết).
+  const assignTag = async (note: Note, tag: string | null) => {
+    try {
+      const next = tag === null ? [] : Array.from(new Set([...note.tags, tag]));
+      if (tag !== null && next.length === note.tags.length) return;
+      const saved = await setNoteTags(note.id, next);
+      onSaved(saved);
+      setTags(await listTags());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   return (
     <>
       {error ? <p className="error">{error}</p> : null}
       {view.name === "list" ? (
         <ListPage
           notes={notes}
+          tags={tags}
           query={query}
           onQuery={(q) => {
             setQuery(q);
@@ -97,6 +121,7 @@ export default function App() {
           onOpen={openNote}
           onTogglePin={(n) => void flipPin(n)}
           onNew={() => void newNote()}
+          onAssignTag={(n, t) => void assignTag(n, t)}
         />
       ) : (
         <EditorPage

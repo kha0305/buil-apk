@@ -3,6 +3,7 @@
 
 use crate::notes::Note;
 use rusqlite::{params, Connection, Row};
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -22,12 +23,45 @@ pub fn lock(state: &DbState) -> Result<std::sync::MutexGuard<'_, Connection>, St
 }
 
 pub fn get_note(conn: &Connection, id: i64) -> Result<Note, String> {
-    conn.query_row(
-        &format!("SELECT {COLS} FROM notes WHERE id = ?1"),
-        params![id],
-        row_to_note,
-    )
-    .map_err(|_| "Note not found".to_string())
+    let mut note = conn
+        .query_row(&format!("SELECT {COLS} FROM notes WHERE id = ?1"), params![id], row_to_note)
+        .map_err(|_| "Note not found".to_string())?;
+    note.tags = tags_of(conn, id)?;
+    Ok(note)
+}
+
+/// Tên tag của một note, xếp theo tên.
+pub fn tags_of(conn: &Connection, note_id: i64) -> Result<Vec<String>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT t.name FROM tags t
+             JOIN note_tags nt ON nt.tag_id = t.id
+             WHERE nt.note_id = ?1 ORDER BY t.name",
+        )
+        .map_err(db_err)?;
+    stmt.query_map(params![note_id], |r| r.get(0))
+        .map_err(db_err)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(db_err)
+}
+
+/// Tag của mọi note trong một câu SQL: id note -> tên tag (để tránh N+1 khi liệt kê).
+pub fn all_tags_map(conn: &Connection) -> Result<HashMap<i64, Vec<String>>, String> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT nt.note_id, t.name FROM note_tags nt
+             JOIN tags t ON t.id = nt.tag_id ORDER BY t.name",
+        )
+        .map_err(db_err)?;
+    let mut map: HashMap<i64, Vec<String>> = HashMap::new();
+    let rows = stmt
+        .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)))
+        .map_err(db_err)?;
+    for row in rows {
+        let (id, name) = row.map_err(db_err)?;
+        map.entry(id).or_default().push(name);
+    }
+    Ok(map)
 }
 
 pub fn exec_one(conn: &Connection, sql: &str, p: &[&dyn rusqlite::types::ToSql]) -> Result<(), String> {
@@ -72,6 +106,23 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         CREATE INDEX IF NOT EXISTS idx_notes_sort
             ON notes (pinned DESC, updated_at DESC);",
     )?;
+    // Migration v2: tag do người dùng tự tạo, một note gắn được nhiều tag.
+    // Chỉ thêm bảng mới, không sửa bảng notes cũ nên dữ liệu cũ còn nguyên.
+    if conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))? < 2 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS tags (
+                id   INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL UNIQUE COLLATE NOCASE
+            );
+            CREATE TABLE IF NOT EXISTS note_tags (
+                note_id INTEGER NOT NULL REFERENCES notes (id) ON DELETE CASCADE,
+                tag_id  INTEGER NOT NULL REFERENCES tags (id) ON DELETE CASCADE,
+                PRIMARY KEY (note_id, tag_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags (tag_id);
+            PRAGMA user_version = 2;",
+        )?;
+    }
     Ok(())
 }
 
@@ -85,5 +136,6 @@ pub fn row_to_note(row: &Row) -> rusqlite::Result<Note> {
         colour: row.get(3)?,
         pinned: row.get(4)?,
         updated_at: row.get(5)?,
+        tags: vec![],
     })
 }

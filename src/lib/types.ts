@@ -5,6 +5,13 @@ export type Note = {
   colour: string;
   pinned: boolean;
   updatedAt: number;
+  tags: string[];
+};
+
+export type Tag = {
+  id: number;
+  name: string;
+  count: number;
 };
 
 export type NewNote = {

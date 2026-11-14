@@ -3,6 +3,7 @@
 
 mod db;
 mod notes;
+mod tags;
 
 use db::{open_db, DbState};
 use notes::{NewNote, Note};
@@ -38,6 +39,16 @@ fn search_notes(state: State<DbState>, query: String) -> Result<Vec<Note>, Strin
     notes::search_notes(&state, &query)
 }
 
+#[tauri::command]
+fn list_tags(state: State<DbState>) -> Result<Vec<tags::Tag>, String> {
+    tags::list_tags(&state)
+}
+
+#[tauri::command]
+fn set_note_tags(state: State<DbState>, id: i64, tags: Vec<String>) -> Result<Note, String> {
+    tags::set_note_tags(&state, id, tags)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let r = tauri::Builder::default()
@@ -53,7 +64,9 @@ pub fn run() {
             update_note,
             delete_note,
             toggle_pin,
-            search_notes
+            search_notes,
+            list_tags,
+            set_note_tags
         ])
         .run(tauri::generate_context!());
     if let Err(e) = r {
