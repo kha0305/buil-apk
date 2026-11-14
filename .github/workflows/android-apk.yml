@@ -73,21 +73,28 @@ jobs:
       # Ký bản release bằng keystore cố định (kha tạo 14/11/2026, giữ file
       # .keystore + mật khẩu cẩn thận — mất là không cập nhật đè app được nữa).
       # Keystore nằm trong GitHub Secrets, KHÔNG commit vào repo.
-      # Cách ký theo mẫu Blinko + tài liệu Tauri: giải mã keystore vào
-      # src-tauri/gen/android/keystore.jks rồi ghi keystore.properties
-      # (storeFile/storePassword/keyAlias/keyPassword) để Gradle ký bản release.
-      # Bản debug trước đây ký bằng key debug dùng 1 lần trên máy ảo GitHub
-      # nên không cập nhật đè được — từ bản release này trở đi, mọi bản sau
-      # ký cùng 1 key nên cài đè thoải mái, note còn nguyên.
+      # Cách ký theo tài liệu Tauri + mẫu Blinko: giải mã keystore vào
+      # src-tauri/gen/android/keystore.jks rồi ghi keystore.properties.
+      # CHÚ Ý (rút từ lần chạy #6, run 43588855849, 14/11/2026): chỉ ghi
+      # keystore.properties là CHƯA đủ — file build.gradle.kts do
+      # `tauri android init` sinh ra không tự nối signing config, nên bản
+      # release vẫn ra file app-universal-release-unsigned.apk và bước đổi tên
+      # chết đúng lỗi như lần chạy #1. Phải chạy thêm script
+      # scripts/patch-android-signing.py (bước ngay dưới) để chèn khối
+      # signingConfigs + signingConfig vào build.gradle.kts thì Gradle mới ký.
+      # storeFile ghi đường dẫn tuyệt đối để Gradle không đoán sai thư mục.
       - name: Giải mã keystore ký release
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > src-tauri/gen/android/keystore.jks
           cat > src-tauri/gen/android/keystore.properties <<EOF
-          storeFile=keystore.jks
+          storeFile=$GITHUB_WORKSPACE/src-tauri/gen/android/keystore.jks
           storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
           keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
           EOF
+
+      - name: Bật ký release trong Gradle
+        run: python3 scripts/patch-android-signing.py
 
       - name: Build APK
         run: npx tauri android build --apk
