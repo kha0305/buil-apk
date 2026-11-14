@@ -96,6 +96,7 @@ pub fn schedule_reminder_notification(
     check_note(note_id, remind_at)?;
     #[cfg(target_os = "android")]
     {
+        use tauri::Emitter;
         let status = android::schedule(
             note_id,
             &title,
@@ -190,14 +191,15 @@ mod android {
         unsafe { JObject::from_raw(ndk_context::android_context().context() as jni::sys::jobject) }
     }
 
-    fn call_static(
-        env: &mut JNIEnv,
+    fn call_static<'a>(
+        env: &mut JNIEnv<'a>,
         name: &str,
         sig: &str,
         extra: &[JValue],
-    ) -> Result<JValueOwned, String> {
+    ) -> Result<JValueOwned<'a>, String> {
         let cls = env.find_class(HELPER_CLASS).map_err(|e| e.to_string())?;
-        let mut args = vec![JValue::Object(activity_object())];
+        let activity = activity_object();
+        let mut args = vec![JValue::Object(&activity)];
         args.extend_from_slice(extra);
         env.call_static_method(&cls, name, sig, &args).map_err(|e| e.to_string())
     }
@@ -228,9 +230,9 @@ mod android {
                 SCHEDULE_SIG,
                 &[
                     JValue::Long(note_id),
-                    JValue::Object(title.into()),
-                    JValue::Object(collapsed.into()),
-                    JValue::Object(expanded.into()),
+                    JValue::Object(&title),
+                    JValue::Object(&collapsed),
+                    JValue::Object(&expanded),
                     JValue::Long(remind_at),
                 ],
             )?;
