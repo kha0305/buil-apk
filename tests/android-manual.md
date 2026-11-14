@@ -44,3 +44,46 @@ Chạy sau khi có APK từ `docs/android-build.md`.
     cam, đỏ san hô, xanh mint, nâu giấy, xám) xếp 2 hàng, không tràn màn hình.
     Chọn từng màu mới: thẻ note đổi màu nền + viền trái đúng màu, note cũ giữ
     nguyên màu cũ.
+19. Kéo một note vào thùng rác: nhấn giữ note, vùng thùng rác hiện ở đáy màn
+    hình, kéo tới đó thì vùng sáng lên, thả ra thì note biến khỏi danh sách.
+    Bấm nút Thùng rác ở đầu trang: note đó nằm trong thùng rác, hiện ngày xóa
+    và số ngày còn lại. Tìm kiếm tên note đó ngoài danh sách không ra nữa.
+20. Trong Thùng rác: bấm Khôi phục thì note quay lại danh sách đúng nhóm tag
+    cũ; bấm Xóa hẳn thì note mất luôn; bấm Dọn sạch thì thùng rác trống.
+    Mở một note rồi bấm Xóa trong editor: note vào thùng rác (không mất hẳn),
+    quay về danh sách, vẫn khôi phục được từ Thùng rác.
+21. Đóng app hẳn, mở lại: note trong thùng rác vẫn còn (migration v4 không
+    mất dữ liệu cũ).
+22. Chọn nhiều rồi kéo một lượt: bấm nút Chọn ở đầu trang, bấm 3 thẻ note
+    (ô tick hiện, đầu trang ghi "Đã chọn 3"), nhấn giữ một thẻ đã chọn rồi
+    kéo: bản sao bay theo tay ghi "3 ghi chú"; thả vào một nhóm tag thì cả
+    3 note đều mang tag đó. Bấm Chọn rồi chọn 2 note khác, kéo cả 2 xuống
+    thùng rác: cả 2 đều vào thùng rác. Bấm Hủy hoặc nút Back thì thoát chế
+    độ chọn. Ngoài chế độ chọn, kéo 1 note vẫn như cũ (nhóm tag / thùng rác).
+23. Quản lý tag: bấm "Quản lý tag" ở đầu danh sách, trang liệt kê mọi tag kèm
+    số ghi chú. Bấm Đổi tên một tag: sửa tên rồi Lưu, tên mới hiện ở cả danh
+    sách nhóm lẫn chip tag trong note; đổi tên thành tên tag khác (không phân
+    biệt hoa thường) thì gộp: hai tag thành một, note của cả hai đều mang tag
+    gộp. Tên để trống thì báo lỗi, không lưu. Nút Back quay về danh sách.
+24. Xóa tag: bấm Xóa ở tag còn ghi chú, hộp xác nhận ghi rõ sẽ gỡ tag khỏi N
+    ghi chú; đồng ý thì tag biến mất nhưng các ghi chú vẫn còn. Tag 0 ghi chú
+    xóa thẳng sau xác nhận.
+25. Kéo tiêu đề nhóm đổi thứ tự: nhấn giữ tiêu đề một nhóm tag khoảng nửa
+    giây rồi kéo lên/xuống — vạch chèn hiện giữa các nhóm ở chỗ sẽ thả, thả
+    ra thì nhóm đổi chỗ ngay. Bấm thường vào tiêu đề vẫn thu gọn/mở nhóm
+    như cũ, kéo note vào nhóm/thùng rác vẫn như cũ. Tắt app hẳn, mở lại:
+    thứ tự nhóm vẫn giữ nguyên. Nhóm "Chưa gắn tag" luôn ở cuối cùng, không
+    kéo được. Tag đổi tên sẽ rơi xuống cuối danh sách nhóm (thứ tự lưu theo
+    tên cũ).
+26. Nhắc hẹn: mở một note, chọn ngày giờ sau 2 phút nữa rồi bấm "Đặt nhắc
+    hẹn", quay về danh sách, để app mở — tới giờ (trong vòng 1 phút kể từ
+    giờ hẹn vì app kiểm mỗi 60 giây) thì bảng nhắc hiện + kêu một tiếng bíp,
+    bấm tên note trong bảng thì mở đúng note đó. Chỉ nhắc 1 lần: bảng nhắc
+    đã đóng thì mở lại note, ô nhắc hẹn trống, không nhắc lại nữa. Tắt app
+    rồi mới tới giờ hẹn thì không nhắc (chỉ nhắc khi app đang mở).
+27. Sao lưu: bấm nút "Sao lưu" ở đầu danh sách, bấm "Chia sẻ bản sao lưu" —
+    máy hiện bảng chia sẻ của Android (hoặc ô JSON để sao chép tay nếu máy
+    không hỗ trợ chia sẻ). Xóa một note bất kỳ, rồi dán bản sao lưu vừa xuất
+    vào ô Nhập, bấm "Nhập bản sao lưu", xác nhận: note vừa xóa về đủ, tag và
+    trạng thái thu gọn nhóm cũng về như cũ. Nhập JSON sai hoặc sai version
+    thì báo lỗi, dữ liệu không đổi.

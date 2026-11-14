@@ -1,6 +1,7 @@
 //! App ghi chú offline — Tauri 2.12 + React + SQLite (rusqlite).
 //! Rust chỉ làm CRUD, giao diện làm bằng React trong WebView.
 
+mod backup;
 mod db;
 mod notes;
 mod settings;
@@ -51,6 +52,16 @@ fn set_note_tags(state: State<DbState>, id: i64, tags: Vec<String>) -> Result<No
 }
 
 #[tauri::command]
+fn rename_tag(state: State<DbState>, id: i64, name: String) -> Result<tags::Tag, String> {
+    tags::rename_tag(&state, id, &name)
+}
+
+#[tauri::command]
+fn delete_tag(state: State<DbState>, id: i64) -> Result<(), String> {
+    tags::delete_tag(&state, id)
+}
+
+#[tauri::command]
 fn get_setting(state: State<DbState>, key: String) -> Result<Option<String>, String> {
     settings::get_setting(&state, &key)
 }
@@ -58,6 +69,46 @@ fn get_setting(state: State<DbState>, key: String) -> Result<Option<String>, Str
 #[tauri::command]
 fn set_setting(state: State<DbState>, key: String, value: String) -> Result<(), String> {
     settings::set_setting(&state, &key, &value)
+}
+
+#[tauri::command]
+fn trash_note(state: State<DbState>, id: i64) -> Result<(), String> {
+    notes::trash_note(&state, id)
+}
+
+#[tauri::command]
+fn restore_note(state: State<DbState>, id: i64) -> Result<Note, String> {
+    notes::restore_note(&state, id)
+}
+
+#[tauri::command]
+fn delete_forever(state: State<DbState>, id: i64) -> Result<(), String> {
+    notes::delete_forever(&state, id)
+}
+
+#[tauri::command]
+fn list_trash(state: State<DbState>) -> Result<Vec<Note>, String> {
+    notes::list_trash(&state)
+}
+
+#[tauri::command]
+fn empty_trash(state: State<DbState>) -> Result<(), String> {
+    notes::empty_trash(&state)
+}
+
+#[tauri::command]
+fn set_reminder(state: State<DbState>, id: i64, remind_at: Option<i64>) -> Result<Note, String> {
+    notes::set_reminder(&state, id, remind_at)
+}
+
+#[tauri::command]
+fn export_backup(state: State<DbState>) -> Result<String, String> {
+    backup::export_backup(&state)
+}
+
+#[tauri::command]
+fn import_backup(state: State<DbState>, json: String) -> Result<usize, String> {
+    backup::import_backup(&state, &json)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -78,8 +129,18 @@ pub fn run() {
             search_notes,
             list_tags,
             set_note_tags,
+            rename_tag,
+            delete_tag,
             get_setting,
-            set_setting
+            set_setting,
+            trash_note,
+            restore_note,
+            delete_forever,
+            list_trash,
+            empty_trash,
+            set_reminder,
+            export_backup,
+            import_backup
         ])
         .run(tauri::generate_context!());
     if let Err(e) = r {

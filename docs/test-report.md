@@ -135,3 +135,58 @@ Kế hoạch test tay trên điện thoại: xem `tests/android-manual.md`.
 - ListPage đọc lúc mở app, ghi ngay mỗi lần bấm thu gọn/mở nhóm — mở note rồi
   quay lại hay tắt app mở lại đều giữ nguyên. DB cũ tự nâng lên v3, note/tag còn nguyên.
 - `cargo test`: 18 passed (15 cũ + 3 mới cho settings), `npm run build` đậu.
+
+## Thùng rác + chọn nhiều note kéo một lượt (migration v4)
+- Migration v4: thêm cột `deleted_at` vào bảng notes (null = còn dùng);
+  `update_note`/`toggle_pin`/`get_note` bỏ qua note trong thùng rác;
+  số lượng mỗi tag không tính note trong thùng rác.
+- 5 lệnh Rust mới: `trash_note` (ghi mốc xóa), `restore_note`,
+  `delete_forever` (note_tags tự xóa theo CASCADE), `list_trash` (mới xóa
+  nhất trước), `empty_trash`. Note trong thùng rác giữ 30 ngày (chỉ hiển
+  thị hạn, chưa tự xóa hết hạn).
+- Kéo thả: đang kéo thì vùng thùng rác hiện cố định ở đáy màn hình, thả vào
+  thì xóa, thả vào nhóm tag thì gắn tag như cũ. Nút Xóa trong editor cũng
+  cho note vào thùng rác. Trang Thùng rác riêng: Khôi phục / Xóa hẳn từng
+  note, Dọn sạch, hiện ngày xóa và số ngày còn lại.
+- Chọn nhiều: nút Chọn ở đầu danh sách, bấm thẻ để chọn/bỏ chọn, đầu trang
+  hiện "Đã chọn N", Hủy hoặc nút Back thoát chế độ chọn. Nhấn giữ một note
+  đã chọn rồi kéo thì kéo cả N note (bản sao bay theo tay ghi "N ghi chú"),
+  thả vào nhóm tag hoặc thùng rác áp dụng cho cả N note; gắn tag/trash
+  chạy lần lượt từng note, note nào lỗi thì báo và dừng ở đó.
+- `cargo test`: 23 passed (18 cũ + 5 mới: 4 thùng rác + 1 số lượng tag),
+  `npm run build` đậu.
+
+## Quản lý tag (không cần migration mới)
+- 2 lệnh Rust mới trong tags.rs: `rename_tag` (đổi tên; trùng tên khác — không
+  phân biệt hoa thường — thì gộp: chuyển hết note sang tag đó rồi xóa tag cũ,
+  trong 1 transaction) và `delete_tag` (xóa tag + note_tags theo CASCADE, note
+  vẫn còn). Helper `get_tag` lấy 1 tag kèm số note (note trong thùng rác không
+  tính), lỗi "Tag not found" nếu không có.
+- Trang Quản lý tag riêng (TagsPage.tsx, theo mẫu TrashPage): đổi tên inline
+  (Lưu/Hủy, Enter lưu, Esc hủy), xóa có confirm ghi rõ số ghi chú bị gỡ tag;
+  xong thì tải lại cả notes lẫn tags. Nút "Quản lý tag" ở đầu màn hình danh sách.
+- `cargo test`: 29 passed (23 cũ + 6 mới cho rename/delete), `npm run build` đậu.
+
+## Nhắc hẹn + sao lưu + xếp thứ tự nhóm (migration v5)
+- Nhắc hẹn (migration v5): thêm cột `remind_at` vào bảng notes; lệnh
+  `set_reminder` đặt/gỡ (null = gỡ). Editor có ô `datetime-local` + nút
+  Đặt/Đổi/Gỡ nhắc hẹn, giờ nhập là giờ địa phương (helper `lib/dates.ts`,
+  không dùng toISOString). App kiểm mỗi 60 giây và mỗi khi danh sách note
+  đổi: note tới giờ thì hiện bảng nhắc, kêu một tiếng bíp bằng WebAudio
+  (`lib/beep.ts`, không thêm file âm thanh), gỡ nhắc hẹn để chỉ nhắc 1 lần.
+  CHỈ nhắc khi app đang mở — tắt app rồi tới giờ thì không nhắc.
+- Sao lưu (không dùng plugin): lệnh `export_backup` trả JSON
+  {version: 1, notes (kể cả thùng rác, kèm tags/deleted_at/remind_at),
+  tags, settings}; `import_backup` kiểm tra dạng và version rồi thay thế
+  toàn bộ dữ liệu trong 1 transaction (giữ nguyên id cũ), trả số note đã
+  nhập. Trang Sao lưu riêng: nút Chia sẻ dùng `navigator.share` (hủy chia
+  sẻ thì im lặng), không hỗ trợ share thì hiện JSON + nút Sao chép; nhập
+  bằng ô dán JSON, có confirm thay thế toàn bộ trước khi nhập.
+- Xếp thứ tự nhóm: thứ tự lưu trong settings key `tag_order` (JSON mảng tên
+  tag), không thêm migration. Kéo tiêu đề nhóm (nhấn giữ ~400ms, tái dùng
+  kéo thả bằng pointer events) thì hiện vạch chèn giữa các nhóm, thả ra lưu
+  thứ tự ngay. Bấm thường vào tiêu đề vẫn thu gọn/mở nhóm, kéo note vẫn như
+  cũ. Tag chưa có trong danh sách xếp cuối theo tên; nhóm "Chưa gắn tag"
+  luôn cuối; tag đổi tên sẽ rơi xuống cuối (thứ tự lưu theo tên cũ).
+- `cargo test`: 33 passed (29 cũ + 4 mới: 2 nhắc hẹn + 2 sao lưu),
+  `npm run build` đậu.

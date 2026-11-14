@@ -1,17 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { COLOURS, type NewNote, type Note } from "../lib/types";
-import { deleteNote, setNoteTags, togglePin, updateNote } from "../services/notesApi";
+import { fromLocalInput, toLocalInput } from "../lib/dates";
+import { setNoteTags, setReminder, togglePin, updateNote } from "../services/notesApi";
 
 type Props = {
   note: Note;
   onClose: () => void;
   onSaved: (note: Note) => void;
   onTagsChanged: () => void;
+  onTrash: (note: Note) => void;
 };
 
 // Ô nhập dùng <textarea> uncontrolled + guard composition: đang gõ Telex/VNI
 // thì không autosave, không ghi đè value, chỉ lưu sau khi composition kết thúc.
-export default function EditorPage({ note, onClose, onSaved, onTagsChanged }: Props) {
+export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTrash }: Props) {
   const titleRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
@@ -20,11 +22,16 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged }: Pr
   const [tags, setTags] = useState<string[]>(note.tags);
   const [tagInput, setTagInput] = useState("");
   const [tagError, setTagError] = useState("");
+  const [remindInput, setRemindInput] = useState(
+    note.remindAt != null ? toLocalInput(note.remindAt) : "",
+  );
+  const [remindError, setRemindError] = useState("");
 
-  // Mở note khác thì đồng bộ lại tag (cùng editor, khác id).
+  // Mở note khác thì đồng bộ lại tag và giờ hẹn (cùng editor, khác id).
   useEffect(() => {
     setTags(note.tags);
-  }, [note.id]);
+    setRemindInput(note.remindAt != null ? toLocalInput(note.remindAt) : "");
+  }, [note.id, note.remindAt]);
 
   // Rời editor thì hủy lịch lưu đang chờ: ref đã tháo, lưu lúc này sẽ ghi đè
   // tiêu đề/nội dung bằng chuỗi rỗng. Đánh đổi: mất tối đa 800ms gõ cuối.
@@ -65,6 +72,38 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged }: Pr
     onSaved(saved);
   };
 
+  // Ngày giờ nhập là giờ địa phương (đổi sang millis bằng giờ địa phương,
+  // không dùng toISOString vì nó ra giờ UTC). Chỉ nhắc khi app đang mở.
+  const saveReminder = async () => {
+    if (!remindInput) {
+      setRemindError("Chọn ngày giờ nhắc hẹn trước.");
+      return;
+    }
+    const ms = fromLocalInput(remindInput);
+    if (ms == null) {
+      setRemindError("Ngày giờ nhắc hẹn không đúng dạng.");
+      return;
+    }
+    try {
+      const saved = await setReminder(note.id, ms);
+      onSaved(saved);
+      setRemindError("");
+    } catch (e) {
+      setRemindError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const clearReminder = async () => {
+    try {
+      const saved = await setReminder(note.id, null);
+      onSaved(saved);
+      setRemindInput("");
+      setRemindError("");
+    } catch (e) {
+      setRemindError(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   // Tag lưu ngay khi thêm/gỡ (lấy kết quả từ Rust làm chuẩn, không đoán).
   // Lưu lỗi thì báo chữ và giữ nguyên chữ đã gõ (không xóa ô nhập trước khi
   // lưu xong như bản cũ — lỗi là mất luôn tag vừa gõ mà không ai biết).
@@ -95,10 +134,10 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged }: Pr
     void saveTags(tags.filter((t) => t !== name));
   };
 
-  const remove = async () => {
-    if (!window.confirm("Xóa ghi chú này?")) return;
-    await deleteNote(note.id);
-    onClose();
+  // Xóa chỉ cho vào thùng rác (khôi phục được), không xóa hẳn nữa.
+  const remove = () => {
+    if (!window.confirm("Cho ghi chú này vào thùng rác?")) return;
+    onTrash(note);
   };
 
   return (
@@ -108,7 +147,7 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged }: Pr
           Quay lại
         </button>
         <button onClick={() => void flipPin()}>{note.pinned ? "Bỏ ghim" : "Ghim"}</button>
-        <button className="danger" onClick={() => void remove()}>
+        <button className="danger" onClick={remove}>
           Xóa
         </button>
       </header>
@@ -122,6 +161,24 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged }: Pr
           />
         ))}
       </div>
+      <div className="reminder-row">
+        <input
+          className="reminder-input"
+          type="datetime-local"
+          value={remindInput}
+          onChange={(e) => setRemindInput(e.currentTarget.value)}
+          aria-label="Ngày giờ nhắc hẹn"
+        />
+        <button type="button" onClick={() => void saveReminder()}>
+          {note.remindAt != null ? "Đổi nhắc hẹn" : "Đặt nhắc hẹn"}
+        </button>
+        {note.remindAt != null ? (
+          <button type="button" onClick={() => void clearReminder()}>
+            Gỡ nhắc hẹn
+          </button>
+        ) : null}
+      </div>
+      {remindError ? <p className="error tag-error">{remindError}</p> : null}
       <input
         ref={titleRef}
         className="title-input"

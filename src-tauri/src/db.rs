@@ -24,7 +24,11 @@ pub fn lock(state: &DbState) -> Result<std::sync::MutexGuard<'_, Connection>, St
 
 pub fn get_note(conn: &Connection, id: i64) -> Result<Note, String> {
     let mut note = conn
-        .query_row(&format!("SELECT {COLS} FROM notes WHERE id = ?1"), params![id], row_to_note)
+        .query_row(
+            &format!("SELECT {COLS} FROM notes WHERE id = ?1 AND deleted_at IS NULL"),
+            params![id],
+            row_to_note,
+        )
         .map_err(|_| "Note not found".to_string())?;
     note.tags = tags_of(conn, id)?;
     Ok(note)
@@ -133,10 +137,24 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             PRAGMA user_version = 3;",
         )?;
     }
+    // Migration v4: thùng rác — thêm cột deleted_at (null = note còn dùng).
+    if conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))? < 4 {
+        conn.execute_batch(
+            "ALTER TABLE notes ADD COLUMN deleted_at INTEGER;
+             PRAGMA user_version = 4;",
+        )?;
+    }
+    // Migration v5: nhắc hẹn — thêm cột remind_at (millis, null = không hẹn).
+    if conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))? < 5 {
+        conn.execute_batch(
+            "ALTER TABLE notes ADD COLUMN remind_at INTEGER;
+             PRAGMA user_version = 5;",
+        )?;
+    }
     Ok(())
 }
 
-pub const COLS: &str = "id, title, content, colour, pinned, updated_at";
+pub const COLS: &str = "id, title, content, colour, pinned, updated_at, deleted_at, remind_at";
 
 pub fn row_to_note(row: &Row) -> rusqlite::Result<Note> {
     Ok(Note {
@@ -146,6 +164,8 @@ pub fn row_to_note(row: &Row) -> rusqlite::Result<Note> {
         colour: row.get(3)?,
         pinned: row.get(4)?,
         updated_at: row.get(5)?,
+        deleted_at: row.get(6)?,
+        remind_at: row.get(7)?,
         tags: vec![],
     })
 }

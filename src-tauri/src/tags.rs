@@ -3,10 +3,10 @@
 
 use crate::db::{db_err, get_note, lock, DbState};
 use crate::notes::Note;
-use rusqlite::params;
-use serde::Serialize;
+use rusqlite::{params, Connection, OptionalExtension};
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Tag {
     pub id: i64,
@@ -15,12 +15,14 @@ pub struct Tag {
 }
 
 /// Mọi tag cùng số note đang mang tag đó, xếp theo tên.
+/// Note trong thùng rác không tính vào số lượng.
 pub fn list_tags(state: &DbState) -> Result<Vec<Tag>, String> {
     let conn = lock(state)?;
     let mut stmt = conn
         .prepare(
-            "SELECT t.id, t.name, COUNT(nt.note_id) FROM tags t
+            "SELECT t.id, t.name, COUNT(n.id) FROM tags t
              LEFT JOIN note_tags nt ON nt.tag_id = t.id
+             LEFT JOIN notes n ON n.id = nt.note_id AND n.deleted_at IS NULL
              GROUP BY t.id ORDER BY t.name",
         )
         .map_err(db_err)?;
@@ -34,6 +36,78 @@ pub fn list_tags(state: &DbState) -> Result<Vec<Tag>, String> {
     .map_err(db_err)?
     .collect::<Result<Vec<_>, _>>()
     .map_err(db_err)
+}
+
+/// Một tag kèm số note đang mang nó (note trong thùng rác không tính).
+pub fn get_tag(conn: &Connection, id: i64) -> Result<Tag, String> {
+    conn.query_row(
+        "SELECT t.id, t.name, COUNT(n.id) FROM tags t
+         LEFT JOIN note_tags nt ON nt.tag_id = t.id
+         LEFT JOIN notes n ON n.id = nt.note_id AND n.deleted_at IS NULL
+         WHERE t.id = ?1 GROUP BY t.id",
+        params![id],
+        |r| {
+            Ok(Tag {
+                id: r.get(0)?,
+                name: r.get(1)?,
+                count: r.get(2)?,
+            })
+        },
+    )
+    .map_err(|_| "Tag not found".to_string())
+}
+
+/// Đổi tên một tag. Tên mới trùng tag khác (không phân biệt hoa thường) thì
+/// gộp: chuyển hết note sang tag đó rồi xóa tag cũ, trả về tag bị gộp vào.
+pub fn rename_tag(state: &DbState, id: i64, name: &str) -> Result<Tag, String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("Tên tag không được để trống".into());
+    }
+    let mut conn = lock(state)?;
+    get_tag(&conn, id)?;
+    let target = conn
+        .query_row(
+            "SELECT id FROM tags WHERE name = ?1 COLLATE NOCASE AND id != ?2",
+            params![name, id],
+            |r| r.get::<_, i64>(0),
+        )
+        .optional()
+        .map_err(db_err)?;
+    match target {
+        Some(target_id) => merge_tag(&mut conn, id, target_id),
+        None => {
+            conn.execute("UPDATE tags SET name = ?1 WHERE id = ?2", params![name, id])
+                .map_err(db_err)?;
+            get_tag(&conn, id)
+        }
+    }
+}
+
+/// Chuyển hết note của tag cũ sang tag đích rồi xóa tag cũ, trong 1 transaction.
+fn merge_tag(conn: &mut Connection, old_id: i64, target_id: i64) -> Result<Tag, String> {
+    {
+        let tx = conn.transaction().map_err(db_err)?;
+        tx.execute(
+            "INSERT OR IGNORE INTO note_tags (note_id, tag_id)
+             SELECT note_id, ?1 FROM note_tags WHERE tag_id = ?2",
+            params![target_id, old_id],
+        )
+        .map_err(db_err)?;
+        tx.execute("DELETE FROM tags WHERE id = ?1", params![old_id])
+            .map_err(db_err)?;
+        tx.commit().map_err(db_err)?;
+    }
+    get_tag(conn, target_id)
+}
+
+/// Xóa một tag: các note vẫn còn, chỉ mất tag đó (note_tags xóa theo CASCADE).
+pub fn delete_tag(state: &DbState, id: i64) -> Result<(), String> {
+    let conn = lock(state)?;
+    get_tag(&conn, id)?;
+    conn.execute("DELETE FROM tags WHERE id = ?1", params![id])
+        .map_err(db_err)?;
+    Ok(())
 }
 
 /// Gắn lại toàn bộ tag của một note: tên nào chưa có thì tạo mới,
@@ -76,7 +150,7 @@ fn normalize_tags(tags: Vec<String>) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::db::open_db;
-    use crate::notes::{create_note, list_notes, NewNote};
+    use crate::notes::{create_note, list_notes, trash_note, NewNote};
     use rusqlite::Connection;
     use std::sync::Mutex;
     use tempfile::TempDir;
@@ -154,6 +228,75 @@ mod tests {
     }
 
     #[test]
+    fn trashed_note_not_counted_in_tag_counts() {
+        let (_tmp, db) = test_db();
+        let a = create_note(&db, note("A")).unwrap();
+        let b = create_note(&db, note("B")).unwrap();
+        set_note_tags(&db, a.id, vec!["Học".into()]).unwrap();
+        set_note_tags(&db, b.id, vec!["Học".into()]).unwrap();
+        trash_note(&db, a.id).unwrap();
+        let tags = list_tags(&db).unwrap();
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].count, 1, "note trong thùng rác không tính vào số lượng tag");
+    }
+
+    #[test]
+    fn rename_tag_updates_notes() {
+        let (_tmp, db) = test_db();
+        let n = create_note(&db, note("A")).unwrap();
+        set_note_tags(&db, n.id, vec!["Học".into()]).unwrap();
+        let renamed = rename_tag(&db, 1, "  Toán  ").unwrap();
+        assert_eq!(renamed.name, "Toán");
+        assert_eq!(list_notes(&db).unwrap()[0].tags, vec!["Toán".to_string()]);
+        assert_eq!(list_tags(&db).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn rename_to_existing_tag_merges_notes() {
+        let (_tmp, db) = test_db();
+        let a = create_note(&db, note("A")).unwrap();
+        let b = create_note(&db, note("B")).unwrap();
+        set_note_tags(&db, a.id, vec!["Học".into()]).unwrap();
+        set_note_tags(&db, b.id, vec!["Toán".into()]).unwrap();
+        let merged = rename_tag(&db, 1, "toán").unwrap();
+        assert_eq!(merged.name, "Toán");
+        assert_eq!(merged.count, 2, "cả hai note đều mang tag Toán sau khi gộp");
+        assert_eq!(list_tags(&db).unwrap().len(), 1, "tag cũ biến mất sau khi gộp");
+        assert_eq!(list_notes(&db).unwrap()[0].tags, vec!["Toán".to_string()]);
+    }
+
+    #[test]
+    fn rename_empty_name_errors() {
+        let (_tmp, db) = test_db();
+        let n = create_note(&db, note("A")).unwrap();
+        set_note_tags(&db, n.id, vec!["Học".into()]).unwrap();
+        assert!(rename_tag(&db, 1, "   ").is_err());
+    }
+
+    #[test]
+    fn rename_missing_tag_errors() {
+        let (_tmp, db) = test_db();
+        assert!(rename_tag(&db, 999, "Toán").is_err());
+    }
+
+    #[test]
+    fn delete_tag_keeps_notes() {
+        let (_tmp, db) = test_db();
+        let n = create_note(&db, note("A")).unwrap();
+        set_note_tags(&db, n.id, vec!["Học".into()]).unwrap();
+        delete_tag(&db, 1).unwrap();
+        assert_eq!(list_notes(&db).unwrap().len(), 1, "note vẫn còn sau khi xóa tag");
+        assert!(list_notes(&db).unwrap()[0].tags.is_empty());
+        assert!(list_tags(&db).unwrap().is_empty());
+    }
+
+    #[test]
+    fn delete_missing_tag_errors() {
+        let (_tmp, db) = test_db();
+        assert!(delete_tag(&db, 999).is_err());
+    }
+
+    #[test]
     fn migration_keeps_old_notes() {
         // Giả lập database cũ (chưa có bảng tags): tạo tay bảng notes kiểu v1.
         let dir = TempDir::new().unwrap();
@@ -181,7 +324,7 @@ mod tests {
         let version: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 3, "migration phải nâng user_version lên bản mới nhất (3)");
+        assert_eq!(version, 5, "migration phải nâng user_version lên bản mới nhất (5)");
         let state = DbState { db: Mutex::new(conn) };
         let all = list_notes(&state).unwrap();
         assert_eq!(all.len(), 1);

@@ -5,7 +5,7 @@
 //!   không dùng `LIKE` của SQLite (chỉ gập case ASCII).
 
 use crate::db::{all_tags_map, db_err, exec_one, get_note, lock, now_millis, row_to_note, DbState, COLS};
-use rusqlite::params;
+use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -18,6 +18,12 @@ pub struct Note {
     pub colour: String,
     pub pinned: bool,
     pub updated_at: i64,
+    /// Mốc thời gian cho vào thùng rác (millis), null = note còn dùng.
+    #[serde(default)]
+    pub deleted_at: Option<i64>,
+    /// Mốc thời gian nhắc hẹn (millis), null = không hẹn.
+    #[serde(default)]
+    pub remind_at: Option<i64>,
     #[serde(default)]
     pub tags: Vec<String>,
 }
@@ -32,19 +38,45 @@ pub struct NewNote {
     pub pinned: bool,
 }
 
-pub fn list_notes(state: &DbState) -> Result<Vec<Note>, String> {
-    let conn = lock(state)?;
+/// Liệt kê note theo điều kiện (gắn tag đã tải sẵn, một câu SQL cho cả danh sách).
+fn list_where(conn: &Connection, cond: &str, order: &str) -> Result<Vec<Note>, String> {
     let mut stmt = conn
-        .prepare(&format!(
-            "SELECT {COLS} FROM notes ORDER BY pinned DESC, updated_at DESC"
-        ))
+        .prepare(&format!("SELECT {COLS} FROM notes WHERE {cond} ORDER BY {order}"))
         .map_err(db_err)?;
     let notes = stmt
         .query_map([], row_to_note)
         .map_err(db_err)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(db_err)?;
-    Ok(attach_tags(notes, &all_tags_map(&conn)?))
+    Ok(attach_tags(notes, &all_tags_map(conn)?))
+}
+
+pub fn list_notes(state: &DbState) -> Result<Vec<Note>, String> {
+    let conn = lock(state)?;
+    list_where(&conn, "deleted_at IS NULL", "pinned DESC, updated_at DESC")
+}
+
+/// Note trong thùng rác, mới xóa nhất trước.
+pub fn list_trash(state: &DbState) -> Result<Vec<Note>, String> {
+    let conn = lock(state)?;
+    list_where(&conn, "deleted_at IS NOT NULL", "deleted_at DESC")
+}
+
+/// Mọi note kể cả trong thùng rác (chỉ dùng cho sao lưu), xếp theo id.
+pub fn list_all_notes(state: &DbState) -> Result<Vec<Note>, String> {
+    let conn = lock(state)?;
+    list_where(&conn, "1", "id ASC")
+}
+
+/// Đặt/gỡ nhắc hẹn cho một note (null = gỡ).
+pub fn set_reminder(state: &DbState, id: i64, remind_at: Option<i64>) -> Result<Note, String> {
+    let conn = lock(state)?;
+    exec_one(
+        &conn,
+        "UPDATE notes SET remind_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+        &[&remind_at, &id],
+    )
+    .and_then(|_| get_note(&conn, id))
 }
 
 /// Gắn tag đã tải sẵn vào từng note (một câu SQL cho cả danh sách).
@@ -74,6 +106,8 @@ pub fn create_note(state: &DbState, input: NewNote) -> Result<Note, String> {
         colour: input.colour,
         pinned: input.pinned,
         updated_at: now,
+        deleted_at: None,
+        remind_at: None,
         tags: vec![],
     })
 }
@@ -83,7 +117,7 @@ pub fn update_note(state: &DbState, id: i64, input: NewNote) -> Result<Note, Str
     let now = now_millis();
     exec_one(
         &conn,
-        "UPDATE notes SET title=?1, content=?2, colour=?3, pinned=?4, updated_at=?5 WHERE id=?6",
+        "UPDATE notes SET title=?1, content=?2, colour=?3, pinned=?4, updated_at=?5 WHERE id=?6 AND deleted_at IS NULL",
         &[&input.title, &input.content, &input.colour, &(input.pinned as i64), &now, &id],
     )
     .and_then(|_| get_note(&conn, id))
@@ -94,9 +128,43 @@ pub fn delete_note(state: &DbState, id: i64) -> Result<(), String> {
     exec_one(&conn, "DELETE FROM notes WHERE id = ?1", &[&id])
 }
 
+/// Cho note vào thùng rác (ghi mốc thời gian, chưa xóa hẳn).
+pub fn trash_note(state: &DbState, id: i64) -> Result<(), String> {
+    let conn = lock(state)?;
+    exec_one(
+        &conn,
+        "UPDATE notes SET deleted_at = ?1 WHERE id = ?2 AND deleted_at IS NULL",
+        &[&now_millis(), &id],
+    )
+}
+
+/// Khôi phục note từ thùng rác về danh sách.
+pub fn restore_note(state: &DbState, id: i64) -> Result<Note, String> {
+    let conn = lock(state)?;
+    exec_one(
+        &conn,
+        "UPDATE notes SET deleted_at = NULL WHERE id = ?1 AND deleted_at IS NOT NULL",
+        &[&id],
+    )
+    .and_then(|_| get_note(&conn, id))
+}
+
+/// Xóa hẳn một note trong thùng rác (note_tags tự xóa theo CASCADE).
+pub fn delete_forever(state: &DbState, id: i64) -> Result<(), String> {
+    delete_note(state, id)
+}
+
+/// Xóa hẳn mọi note trong thùng rác (0 note cũng xong, không lỗi).
+pub fn empty_trash(state: &DbState) -> Result<(), String> {
+    lock(state)?
+        .execute("DELETE FROM notes WHERE deleted_at IS NOT NULL", [])
+        .map_err(db_err)?;
+    Ok(())
+}
+
 pub fn toggle_pin(state: &DbState, id: i64) -> Result<Note, String> {
     let conn = lock(state)?;
-    exec_one(&conn, "UPDATE notes SET pinned = NOT pinned WHERE id = ?1", &[&id])
+    exec_one(&conn, "UPDATE notes SET pinned = NOT pinned WHERE id = ?1 AND deleted_at IS NULL", &[&id])
         .and_then(|_| get_note(&conn, id))
 }
 
@@ -152,10 +220,14 @@ mod tests {
             colour: "pink".into(),
             pinned: true,
             updated_at: 1_792_000_000_000,
+            deleted_at: None,
+            remind_at: Some(1_792_100_000_000),
             tags: vec!["Học".into()],
         };
         let json = serde_json::to_string(&n).unwrap();
         assert!(json.contains("\"updatedAt\":1792000000000"), "json = {json}");
+        assert!(json.contains("\"deletedAt\":null"), "json = {json}");
+        assert!(json.contains("\"remindAt\":1792100000000"), "json = {json}");
         assert!(!json.contains("updated_at"), "json = {json}");
         let back: Note = serde_json::from_str(&json).unwrap();
         assert_eq!(back, n);
@@ -295,5 +367,84 @@ mod tests {
             assert_eq!(all.len(), 1);
             assert_eq!(all[0].title, "Bền");
         }
+    }
+
+    #[test]
+    fn trash_note_hides_from_list_and_search_but_stays_in_trash() {
+        let (_tmp, db) = test_db();
+        let a = create_note(&db, note("A", "nội dung A")).unwrap();
+        let b = create_note(&db, note("B", "")).unwrap();
+        trash_note(&db, a.id).unwrap();
+
+        let ids: Vec<i64> = list_notes(&db).unwrap().iter().map(|n| n.id).collect();
+        assert_eq!(ids, vec![b.id]);
+        assert!(search_notes(&db, "nội dung A").unwrap().is_empty());
+        let trash = list_trash(&db).unwrap();
+        assert_eq!(trash.len(), 1);
+        assert_eq!(trash[0].id, a.id);
+        assert!(trash[0].deleted_at.is_some());
+    }
+
+    #[test]
+    fn restore_note_brings_back_to_list() {
+        let (_tmp, db) = test_db();
+        let a = create_note(&db, note("A", "")).unwrap();
+        trash_note(&db, a.id).unwrap();
+        let back = restore_note(&db, a.id).unwrap();
+        assert_eq!(back.id, a.id);
+        assert_eq!(back.deleted_at, None);
+        assert_eq!(list_notes(&db).unwrap().len(), 1);
+        assert!(list_trash(&db).unwrap().is_empty());
+    }
+
+    #[test]
+    fn delete_forever_removes_note_and_its_tags() {
+        let (_tmp, db) = test_db();
+        let a = create_note(&db, note("A", "")).unwrap();
+        crate::tags::set_note_tags(&db, a.id, vec!["Học".into()]).unwrap();
+        trash_note(&db, a.id).unwrap();
+        delete_forever(&db, a.id).unwrap();
+        assert!(list_trash(&db).unwrap().is_empty());
+        let count: i64 = db
+            .db
+            .lock()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM note_tags", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn empty_trash_keeps_live_notes() {
+        let (_tmp, db) = test_db();
+        let a = create_note(&db, note("A", "")).unwrap();
+        let b = create_note(&db, note("B", "")).unwrap();
+        trash_note(&db, a.id).unwrap();
+        empty_trash(&db).unwrap();
+        assert!(list_trash(&db).unwrap().is_empty());
+        let all = list_notes(&db).unwrap();
+        assert_eq!(all.len(), 1);
+        assert_eq!(all[0].id, b.id);
+    }
+
+    #[test]
+    fn set_reminder_round_trip_and_clear() {
+        let (_tmp, db) = test_db();
+        let a = create_note(&db, note("A", "")).unwrap();
+        assert_eq!(a.remind_at, None);
+        let saved = set_reminder(&db, a.id, Some(1_792_100_000_000)).unwrap();
+        assert_eq!(saved.remind_at, Some(1_792_100_000_000));
+        assert_eq!(list_notes(&db).unwrap()[0].remind_at, Some(1_792_100_000_000));
+        let cleared = set_reminder(&db, a.id, None).unwrap();
+        assert_eq!(cleared.remind_at, None);
+    }
+
+    #[test]
+    fn set_reminder_on_missing_or_trashed_note_errors() {
+        let (_tmp, db) = test_db();
+        assert!(set_reminder(&db, 999, Some(1)).is_err());
+        let a = create_note(&db, note("A", "")).unwrap();
+        trash_note(&db, a.id).unwrap();
+        assert!(set_reminder(&db, a.id, Some(1)).is_err());
     }
 }

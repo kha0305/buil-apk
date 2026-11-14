@@ -7,9 +7,12 @@ type Props = {
   onTogglePin: (note: Note) => void;
   onPointerDown?: (note: Note, e: PointerEvent) => void;
   dragging?: boolean;
+  // Chế độ chọn nhiều: thẻ hiện ô tick thay cho nút ghim.
+  selectMode?: boolean;
+  selected?: boolean;
 };
 
-export default function NoteCard({ note, onOpen, onTogglePin, onPointerDown, dragging }: Props) {
+export default function NoteCard({ note, onOpen, onTogglePin, onPointerDown, dragging, selectMode, selected }: Props) {
   const title = note.title.trim() || "Ghi chú mới";
   const preview = note.content.trim();
   return (
@@ -18,17 +21,23 @@ export default function NoteCard({ note, onOpen, onTogglePin, onPointerDown, dra
       onClick={() => onOpen(note)}
       onPointerDown={(e) => onPointerDown?.(note, e)}
     >
-      <button
-        className="pin-btn"
-        aria-label={note.pinned ? "Bỏ ghim" : "Ghim"}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          onTogglePin(note);
-        }}
-      >
-        {note.pinned ? "Đã ghim" : "Ghim"}
-      </button>
+      {selectMode ? (
+        <span className={`tick${selected ? " on" : ""}`} aria-hidden="true">
+          {selected ? "✓" : ""}
+        </span>
+      ) : (
+        <button
+          className="pin-btn"
+          aria-label={note.pinned ? "Bỏ ghim" : "Ghim"}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onTogglePin(note);
+          }}
+        >
+          {note.pinned ? "Đã ghim" : "Ghim"}
+        </button>
+      )}
       <h2>{title}</h2>
       {preview ? <p>{preview}</p> : null}
       {note.tags.length > 0 ? (

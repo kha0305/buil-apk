@@ -5,6 +5,8 @@ export type Note = {
   colour: string;
   pinned: boolean;
   updatedAt: number;
+  deletedAt: number | null;
+  remindAt: number | null;
   tags: string[];
 };
 
