@@ -31,6 +31,10 @@ body {
   min-height: 100dvh;
   display: flex;
   flex-direction: column;
+  /* Nền đục: màn mới vẽ thành một tấm kem đặc ngay từ lần vẽ đầu, che
+     hẳn màn cũ phía dưới (tránh WebView vẽ màn mới từng mảnh trong lúc
+     khung cũ vẫn còn hiện, gây cảm giác 2 màn chồng nhau ~1 giây). */
+  background: var(--bg);
   padding:
     calc(env(safe-area-inset-top, 0px) + 12px)
     calc(env(safe-area-inset-right, 0px) + 16px)
@@ -558,18 +562,24 @@ button.danger {
   -webkit-line-clamp: 2;
 }
 
-/* Chip "Ghim" ở góc trên-phải thẻ (chỉ note đang ghim). */
+/* Icon ghim ở góc trên-phải thẻ (chỉ note đang ghim): vòng tròn nhỏ 28px
+   chứa icon đinh ghim đỏ, cùng cỡ/vị trí với ô tick ở chế độ chọn nên
+   không lệch bố cục khi đổi chế độ. */
 .pin-chip {
   align-self: flex-end;
   flex-shrink: 0;
-  font-size: 12px;
-  font-weight: 700;
-  padding: 4px 10px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   margin-bottom: 6px;
-  border-radius: 999px;
+  border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--card);
-  color: var(--text);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
 }
 
 /* Ô tick khi chọn nhiều note: tròn, viền nhạt; đã chọn thì nền đỏ, ✓ trắng. */

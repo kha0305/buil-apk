@@ -1,6 +1,27 @@
 import type { PointerEvent } from "react";
 import type { Note } from "../lib/types";
 
+// Icon đinh ghim (cùng hình với PinIcon ở EditorPage, thu nhỏ 16px,
+// tô đặc màu đỏ chủ đạo để dễ thấy trên thẻ).
+function PinIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M9 4h6l1 7 3 3v2H5v-2l3-3 1-7z" />
+      <path d="M12 16v5" />
+    </svg>
+  );
+}
+
 type Props = {
   note: Note;
   onOpen: (note: Note) => void;
@@ -58,7 +79,7 @@ export default function NoteCard({
             onTogglePin(note);
           }}
         >
-          Ghim
+          <PinIcon />
         </button>
       ) : null}
       <h2>{title}</h2>

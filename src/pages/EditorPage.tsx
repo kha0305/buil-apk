@@ -23,6 +23,7 @@ import {
 } from "../lib/reminderNotify";
 import {
   deleteNoteForever,
+  isNotFoundError,
   listTags,
   renameTag,
   setNoteTags,
@@ -38,6 +39,8 @@ type Props = {
   note: Note;
   onClose: () => void;
   onSaved: (note: Note) => void;
+  // Bản nháp bị bỏ (hoặc note đã mất khỏi DB): App gỡ note khỏi danh sách.
+  onDiscarded?: (id: number) => void;
   onTagsChanged: () => void;
   onTrash: (note: Note) => void;
 };
@@ -108,7 +111,7 @@ const quickTime = (kind: Exclude<QuickKind, null>): string => {
 
 // Đổi tên/icon/màu tag qua notesApi.renameTag(id, name, icon, colour)
 // (Backend đã nâng lệnh rename_tag lên 4 tham số).
-export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTrash }: Props) {
+export default function EditorPage({ note, onClose, onSaved, onDiscarded, onTagsChanged, onTrash }: Props) {
   const titleRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
@@ -212,7 +215,7 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
       setJustSaved(true);
       return saved;
     } catch (e) {
-      toast(e instanceof Error ? e.message : String(e), "error");
+      if (!handleGhost(e)) toast(e instanceof Error ? e.message : String(e), "error");
       return null;
     }
   };
@@ -235,7 +238,11 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
 
   // Xóa hẳn dòng note đã tạo sẵn cho bản nháp (kèm nhắc hẹn native nếu có).
   // Chỉ dùng cho bản nháp bị bỏ, không dùng cho note đã lưu thật.
-  const discardDraft = async () => {
+  // Trả về true khi dòng đã mất khỏi DB — khi đó phải báo App gỡ note
+  // khỏi danh sách, nếu không note còn hiện ở trang chính dù DB đã mất
+  // (note ma: mọi thao tác sau đó đều báo đỏ "Note not found"). Lỗi xóa
+  // khác thì trả false để note ở lại danh sách (dòng có thể vẫn còn).
+  const discardDraft = async (): Promise<boolean> => {
     try {
       await cancelNativeReminder(note.id);
     } catch {
@@ -243,9 +250,27 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
     }
     try {
       await deleteNoteForever(note.id);
-    } catch {
-      // Xóa lỗi thì cứ về danh sách, note trống còn đó cũng không mất dữ liệu.
+      onDiscarded?.(note.id);
+      return true;
+    } catch (e) {
+      if (isNotFoundError(e)) {
+        // Dòng đã mất khỏi DB từ trước — cũng gỡ khỏi danh sách.
+        onDiscarded?.(note.id);
+        return true;
+      }
+      return false;
     }
+  };
+
+  // Lỗi "Note not found" khi đang sửa một note ma: note đã mất khỏi DB,
+  // báo đỏ rồi gỡ khỏi danh sách và đóng editor (không để sửa một note
+  // không tồn tại). Trả về true nếu đã xử lý trường hợp này.
+  const handleGhost = (e: unknown): boolean => {
+    if (!isNotFoundError(e)) return false;
+    toast("Note not found", "error");
+    onDiscarded?.(note.id);
+    onClose();
+    return true;
   };
 
   // Nút Tạo/Lưu ở đầu trang. Tạo trên bản nháp trống thì báo đỏ và ở lại,
@@ -304,7 +329,7 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
     try {
       onSaved(await togglePin(note.id));
     } catch (e) {
-      toast(e instanceof Error ? e.message : String(e), "error");
+      if (!handleGhost(e)) toast(e instanceof Error ? e.message : String(e), "error");
     }
   };
 
@@ -336,7 +361,7 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
       onTagsChanged();
       return saved;
     } catch (e) {
-      toast(e instanceof Error ? e.message : String(e), "error");
+      if (!handleGhost(e)) toast(e instanceof Error ? e.message : String(e), "error");
       return null;
     }
   };
@@ -409,7 +434,7 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
       await scheduleNativeReminder(note.id, d.title, d.content, ms);
       toast("Đã đặt nhắc hẹn.");
     } catch (e) {
-      toast(e instanceof Error ? e.message : String(e), "error");
+      if (!handleGhost(e)) toast(e instanceof Error ? e.message : String(e), "error");
     }
   };
 
@@ -422,7 +447,7 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
       await cancelNativeReminder(note.id);
       toast("Đã gỡ nhắc hẹn.");
     } catch (e) {
-      toast(e instanceof Error ? e.message : String(e), "error");
+      if (!handleGhost(e)) toast(e instanceof Error ? e.message : String(e), "error");
     }
   };
 
@@ -435,7 +460,7 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
   ];
 
   return (
-    <main style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top, 0px) + 12px) calc(env(safe-area-inset-right, 0px) + 16px) 118px calc(env(safe-area-inset-left, 0px) + 16px)", color: INK }}>
+    <main style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", background: "#f7f1e5", padding: "calc(env(safe-area-inset-top, 0px) + 12px) calc(env(safe-area-inset-right, 0px) + 16px) 118px calc(env(safe-area-inset-left, 0px) + 16px)", color: INK }}>
       <header
         style={{
           display: "flex",
@@ -569,8 +594,11 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
         </div>
       </div>
 
-      <p style={{ color: MUTED, fontSize: 13, margin: "10px 4px 0" }}>
-        {justSaved ? "Đã lưu" : `Đã sửa ${fmtMetaTime(note.updatedAt)}`} · {wordCount} từ
+      <p style={{ color: MUTED, fontSize: 13, margin: "10px 4px 0", lineHeight: 1.5 }}>
+        {justSaved ? "Đã lưu" : `Đã sửa ${fmtMetaTime(note.updatedAt)}`}
+      </p>
+      <p style={{ color: MUTED, fontSize: 13, margin: "2px 4px 0" }}>
+        {wordCount} từ
       </p>
 
       <nav
@@ -830,8 +858,8 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
               setQuick(null);
             }}
             style={{
-              flex: 1,
-              minWidth: 0,
+              width: 216,
+              flexShrink: 0,
               border: "1px solid #e6dcc8",
               borderRadius: 12,
               background: "#fffdf7",

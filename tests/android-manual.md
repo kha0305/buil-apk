@@ -401,3 +401,62 @@ thiết kế bảng nhắc mới thay cho bảng cũ.)
     hết thì nút thành "Bỏ chọn hết" (bấm là bỏ chọn hết) — giống hệt
     nút "Chọn tất cả"/"Bỏ chọn hết" ở đầu màn chính. Ở chế độ thường
     (chưa chọn) thì nút này không hiện.
+
+## Sửa lỗi v18.2
+
+83. Chấm màu ở đầu nhóm thu gọn theo đúng thứ tự các ô note: tạo một
+    nhóm có 3 note màu khác nhau (vd xanh lá, hồng, xanh dương), thu gọn
+    nhóm rồi xem các chấm màu ở đầu nhóm — thứ tự các chấm phải khớp đúng
+    thứ tự các ô note khi mở nhóm ra (chấm đầu = màu ô đầu, chấm giữa =
+    màu ô giữa, chấm cuối = màu ô cuối).
+84. Kéo note thả vào khoảng trống thì về "Chưa gắn tag": kéo một note
+    đang có tag ra khỏi nhóm, thả vào khoảng trống (không nằm trên nhóm
+    nào, không phải thùng rác) thì note đó về nhóm "Chưa gắn tag" (giống
+    hệt thả vào nhóm "Chưa gắn tag"). Kéo nhiều note đang chọn thả vào
+    khoảng trống thì cả đám cùng về "Chưa gắn tag". Kéo trong cùng nhóm
+    (xếp lại), kéo sang nhóm khác (gán tag đó), kéo vào thùng rác (cho
+    vào thùng rác) vẫn như cũ.
+85. Đổi tên tag không làm nhóm rơi xuống cuối: đổi tên một tag (nhấn giữ
+    tên tag hoặc bấm nút bút chì khi đang lọc đúng tag đó), lưu xong thì
+    nhóm vẫn ở đúng vị trí cũ trong danh sách (không rơi xuống cuối), và
+    trạng thái thu gọn/mở của nhóm giữ nguyên. Tên mới và icon mới hiện
+    ngay ở viên tên và chip lọc, màu khung nhóm đổi theo màu mới, không
+    cần tải lại danh sách.
+86. Form đổi tên báo lỗi đúng và hủy không đổi dữ liệu: trong form đổi
+    tên, để trống tên rồi bấm ✓ thì hiện toast đỏ và vẫn ở lại form; đổi
+    sang tên đã có của tag khác rồi bấm ✓ thì hiện toast đỏ "Tên tag này
+    đã có rồi." và vẫn ở lại form (không lưu lỗi). Bấm ✕ hủy thì đóng
+    form, tên/icon/màu của tag không đổi. Nút bút chì ở đầu nhóm chỉ hiện
+    khi đang lọc đúng tag đó (không hiện khi lọc "Tất cả" hay lọc tag
+    khác); nhấn giữ tên tag vẫn mở được form đổi tên dù đang lọc nào.
+87. Bỏ nháp trống không để lại note ma: bấm + tạo note mới, không gõ gì,
+    bấm nút back (hoặc nút "Bỏ" ở menu dưới) thì về danh sách và note
+    "Ghi chú mới" KHÔNG còn trong nhóm "Chưa gắn tag" (đã xóa hẳn khỏi DB
+    và khỏi danh sách). Ngược lại: tạo note mới, gõ nội dung rồi back thì
+    note vẫn còn trong danh sách (không bị xóa nhầm). Kéo note trong danh
+    sách vào thùng rác sau đó không còn toast đỏ "Note not found".
+88. Note ma tự biến mất khi backend báo "Note not found": nếu một thao tác
+    trên note (kéo vào thùng rác, gán tag, ghim) mà hiện toast đỏ "Note
+    not found" thì note đó biến mất khỏi danh sách ngay (không nằm đó mãi);
+    bấm tab Ghi chú để tải lại danh sách cũng không thấy nó nữa. (Sau sửa
+    gốc ở case 87 thì note ma không còn sinh ra qua đường bỏ nháp; đây là
+    lưới an toàn cho mọi đường khác.)
+89. Chuyển màn Thùng rác không chồng nhau: ở trang chính, bấm icon thùng
+    rác ở đầu trang thì màn Thùng rác hiện ngay với nền kem đặc, không còn
+    thấy danh sách trang chính ("Chưa gắn tag"...) lấp ló phía sau trong
+    ~1 giây đầu. Bấm ‹ về lại trang chính cũng sạch, không chồng.
+90. Ô ngày giờ nhắc hẹn ngắn lại: mở một note rồi mở sheet Nhắc hẹn, ô
+    chọn ngày giờ chỉ rộng vừa đủ hiện trọn ngày giờ (vd "02:58
+    15/11/2026", chữ không bị cắt), không còn giãn hết chiều rộng sheet;
+    nút "Đặt" vẫn nằm cạnh bên phải ô. 4 chip nhanh ("15 phút nữa",
+    "1 giờ nữa", "Tối nay 20:00", "Sáng mai 8:00") và dòng ghi chú phía
+    dưới không đổi.
+91. Chip "Ghim" thành icon đinh ghim: ghim một note thì góc trên-phải ô
+    hiện vòng tròn nhỏ chứa icon đinh ghim đỏ (không còn chữ "Ghim"); bấm
+    vào icon thì bỏ ghim, icon biến mất; bấm vào ô (không bấm icon) thì
+    vẫn mở note bình thường. Ở chế độ chọn, icon ghim được thay bằng ô
+    tick như cũ.
+92. Dòng thông tin dưới thẻ soạn thành 2 dòng (v18.3): mở một note, dòng
+    trên là thời gian sửa gần nhất ("Đã sửa HH:MM", hoặc "Đã lưu" ngay
+    sau khi lưu), dòng dưới là số từ ("N từ"); hai dòng tách riêng, không
+    còn gộp chung một dòng bằng dấu "·".

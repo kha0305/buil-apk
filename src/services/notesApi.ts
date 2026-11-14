@@ -3,6 +3,12 @@ import type { NewNote, Note, Tag } from "../lib/types";
 
 export const isTauri = () => "__TAURI_INTERNALS__" in window;
 
+// Backend báo "Note not found" khi một lệnh (cập nhật/xóa/gắn tag) chạm
+// vào id không còn trong DB (db.rs: get_note/exec_one). Dùng để nhận ra
+// note ma: note còn trong danh sách phía giao diện nhưng đã mất khỏi DB.
+export const isNotFoundError = (e: unknown): boolean =>
+  (e instanceof Error ? e.message : String(e)).includes("Note not found");
+
 export const listNotes = () => invoke<Note[]>("list_notes");
 export const searchNotes = (query: string) => invoke<Note[]>("search_notes", { query });
 export const createNote = (input: NewNote) => invoke<Note>("create_note", { input });

@@ -11,6 +11,7 @@ import {
 import ReminderDialog from "./components/ReminderDialog";
 import {
   createNote,
+  isNotFoundError,
   isTauri,
   listNotes,
   listTags,
@@ -110,6 +111,14 @@ export default function App() {
     }
   }, []);
 
+  // Note ma (đã mất khỏi DB nhưng còn trong danh sách giao diện): gỡ khỏi
+  // danh sách ngay rồi tải lại để đồng bộ hẳn với DB, thay vì để nó nằm
+  // đó mãi và mọi thao tác sau đều báo "Note not found".
+  const dropGhost = (id: number) => {
+    setNotes((prev) => prev.filter((n) => n.id !== id));
+    void reload(query);
+  };
+
 // Gỡ màn chờ inline trong index.html sau lần render đầu — kể cả khi danh
   // sách trống hay tải lỗi, màn chờ không được kẹt lại. Effect chạy 1 lần
   // lúc mount, sau khi giao diện đã render xong.
@@ -201,7 +210,8 @@ export default function App() {
         setView({ name: "editor", note: saved });
       }
     } catch (e) {
-      fail(e);
+      if (isNotFoundError(e)) dropGhost(note.id);
+      else fail(e);
     }
   };
 
@@ -232,6 +242,10 @@ export default function App() {
       try {
         onSaved(await setNoteTags(note.id, next));
       } catch (e) {
+        if (isNotFoundError(e)) {
+          dropGhost(note.id);
+          continue;
+        }
         fail(e);
         return;
       }
@@ -250,6 +264,10 @@ export default function App() {
         setNotes((prev) => prev.filter((n) => n.id !== note.id));
         done += 1;
       } catch (e) {
+        if (isNotFoundError(e)) {
+          dropGhost(note.id);
+          continue;
+        }
         fail(e);
         return done;
       }
@@ -374,6 +392,7 @@ export default function App() {
           note={view.note}
           onClose={() => setView({ name: "list" })}
           onSaved={onSaved}
+          onDiscarded={(id) => setNotes((prev) => prev.filter((n) => n.id !== id))}
           onTagsChanged={() => void reloadTags()}
           onTrash={(n) => void trashNotes([n])}
         />

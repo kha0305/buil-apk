@@ -10,7 +10,6 @@ import {
 import type { Note, Tag } from "../lib/types";
 import {
   blendHex,
-  COLOURS,
   COLOUR_HEX,
   TAG_COLOURS,
   TAG_COLOUR_HEX,
@@ -167,11 +166,6 @@ const tagHex = (colour: string): string =>
 
 const noteHex = (colour: string): string =>
   (COLOUR_HEX as Record<string, string>)[colour] ?? "#e6e6e6";
-
-const colourRank = (colour: string): number => {
-  const i = (COLOURS as readonly string[]).indexOf(colour);
-  return i === -1 ? 999 : i;
-};
 
 const gridIcon = (
   <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -467,6 +461,10 @@ export default function ListPage({
         }
         return;
       }
+      // Thả vào khoảng trống (không nằm trên nhóm nào, không phải thùng
+      // rác): gỡ tag của các note đang kéo, cho về "Chưa gắn tag" — giống
+      // hệt như thả vào nhóm "Chưa gắn tag" (overTagId === 0).
+      cbRef.current.onAssignTags(d.notes, null);
       return;
     }
     if (!modeRef.current.selectMode) cbRef.current.onOpen(d.notes[0]);
@@ -705,10 +703,20 @@ export default function ListPage({
       toast("Tên tag không được để trống.", "error");
       return;
     }
+    // Tên cũ (trước khi đổi) để giữ đúng vị trí nhóm trong tagOrder.
+    const oldName = tags.find((t) => t.id === editingTag.id)?.name;
     try {
       // Lưu tên + icon + màu trong MỘT lần gọi; trùng tên thì backend báo
       // lỗi ("Tên tag này đã có rồi.") và hiện toast đỏ, ở lại form sửa.
       await renameTag(editingTag.id, name, editingTag.icon, editingTag.colour);
+      // Giữ vị trí nhóm: tagOrder lưu theo tên nên đổi tên xong phải thay
+      // tên cũ bằng tên mới (cùng vị trí), không thì nhóm rơi xuống cuối
+      // vì tên mới không có trong tagOrder.
+      if (oldName && oldName !== name && tagOrder.includes(oldName)) {
+        const next = tagOrder.map((n) => (n === oldName ? name : n));
+        setTagOrder(next);
+        void setSetting("tag_order", JSON.stringify(next)).catch(() => undefined);
+      }
       setEditingTag(null);
       onTagsChanged();
     } catch (e) {
@@ -854,11 +862,9 @@ export default function ListPage({
             // Tag có màu thì khung nhóm nhuộm nhạt theo màu tag (đã cache
             // trong `tints`); nhóm Chưa gắn tag dùng nền mặc định của .tagbox.
             // Chấm màu khi nhóm thu gọn: một chấm cho mỗi màu note khác nhau
-            // trong nhóm, xếp theo thứ tự bảng màu (cầu vồng), không theo
-            // thứ tự note xuất hiện.
-            const dots = [...new Set(g.notes.map((n) => n.colour))].sort(
-              (a, b) => colourRank(a) - colourRank(b),
-            );
+            // trong nhóm, theo đúng thứ tự note xuất hiện (thứ tự hiển thị)
+            // để thu gọn rồi mở ra, chấm màu khớp với các ô note.
+            const dots = [...new Set(g.notes.map((n) => n.colour))];
             // Chế độ chọn: nút "N note" ở đầu nhóm chọn/bỏ chọn cả nhóm.
             const groupIds = g.notes.map((n) => n.id);
             const groupAllSelected =
