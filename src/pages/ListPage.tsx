@@ -1,6 +1,23 @@
-import { Fragment, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import type { Note, Tag } from "../lib/types";
-import { getSetting, setSetting } from "../services/notesApi";
+import {
+  blendHex,
+  COLOURS,
+  COLOUR_HEX,
+  TAG_COLOURS,
+  TAG_COLOUR_HEX,
+} from "../lib/types";
+import TagIcon, { TAG_ICON_IDS } from "../components/TagIcon";
+import { getSetting, renameTag, setSetting } from "../services/notesApi";
+import { toast } from "../lib/toast";
 import NoteCard from "../components/NoteCard";
 
 type Props = {
@@ -10,12 +27,14 @@ type Props = {
   onQuery: (q: string) => void;
   onOpen: (note: Note) => void;
   onTogglePin: (note: Note) => void;
-  onNew: () => void;
+  onOpenTrash: () => void;
   onAssignTags: (notes: Note[], tag: string | null) => void;
   onTrashNotes: (notes: Note[]) => void;
-  onOpenTrash: () => void;
-  onOpenTags: () => void;
-  onOpenBackup: () => void;
+  onReorder: (tagId: number, orderedIds: number[]) => void;
+  onTagsChanged: () => void;
+  onVisibleChange: (ids: number[]) => void;
+  onToggleSelectMany: (ids: number[], select: boolean) => void;
+  deletingIds: ReadonlySet<number>;
   selectMode: boolean;
   selectedIds: ReadonlySet<number>;
   onToggleSelect: (note: Note) => void;
@@ -23,204 +42,424 @@ type Props = {
   onExitSelectMode: () => void;
 };
 
+type Group = {
+  tag: Tag;
+  notes: Note[];
+};
+
 // `notes` là tập note đang kéo: 1 note khi kéo đơn, N note khi kéo nhiều
-// trong chế độ chọn. `overTrash` = con trỏ đang ở trên vùng thùng rác.
+// trong chế độ chọn. `overTagId` = nhóm đang ở dưới con trỏ (id tag, 0 là
+// nhóm Chưa gắn tag). `insertIndex` chỉ có nghĩa khi kéo 1 note trong
+// cùng một nhóm (xếp lại thứ tự).
 type DragState = {
   notes: Note[];
   x: number;
   y: number;
-  overTag: string | null;
+  fromTagId: number;
+  overTagId: number | null;
+  overTrash: boolean;
+  moved: boolean;
+  insertIndex: number | null;
+};
+
+// Phần trạng thái kéo mà giao diện cần vẽ lại: chỉ đổi khi qua nhóm khác,
+// vào/ra vùng thùng rác, hoặc bắt đầu di chuyển — KHÔNG đổi theo từng
+// điểm chạm (tọa độ con trỏ chỉ đẩy transform của bản sao qua ref, xem
+// positionClone; render lại cả danh sách mỗi lần di chuyển là giật).
+type DragUi = {
+  notes: Note[];
+  fromTagId: number;
+  overTagId: number | null;
   overTrash: boolean;
   moved: boolean;
 };
 
-// Nhóm đang bị kéo theo tiêu đề: `insertIndex` là chỗ sẽ thả trong danh
-// sách tên tag đã bỏ nhóm đang kéo (không tính nhóm "Chưa gắn tag").
-type GroupDrag = {
+type RenameDraft = {
+  id: number;
   name: string;
-  x: number;
-  y: number;
-  moved: boolean;
-  insertIndex: number;
+  icon: string;
+  colour: string;
 };
 
-// Nhấn giữ nửa giây mới nhấc note lên: cuộn trang bằng tay vẫn bình thường,
-// chỉ khi giữ yên mới bắt đầu kéo. HTML5 drag-and-drop không dùng được
-// trên cảm ứng nên kéo thả viết bằng Pointer Events, chạy cả chuột lẫn tay.
+// Nhấn giữ ~400ms mới nhấc note/tag lên: cuộn trang bằng tay vẫn bình
+// thường, chỉ khi giữ yên mới bắt đầu kéo. HTML5 drag-and-drop không dùng
+// được trên cảm ứng nên kéo thả viết bằng Pointer Events, chạy cả chuột
+// lẫn tay. Kéo đi >12px trước khi đủ 400ms thì hủy hẹn giờ (đó là cuộn).
 const LONG_PRESS_MS = 400;
 const MOVE_PX = 12;
+const PAGE_BG = "#f7f1e5";
+const TAGBOX_BORDER = "#d8cfba";
 
-export default function ListPage({ notes, tags, query, onQuery, onOpen, onTogglePin, onNew, onAssignTags, onTrashNotes, onOpenTrash, onOpenTags, onOpenBackup, selectMode, selectedIds, onToggleSelect, onEnterSelectMode, onExitSelectMode }: Props) {
-  const [drag, setDrag] = useState<DragState | null>(null);
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
-  const [groupDrag, setGroupDrag] = useState<GroupDrag | null>(null);
-  // Thứ tự nhóm đã lưu (tên tag theo thứ tự kéo thả); tag chưa có trong
-  // danh sách thì xếp cuối theo tên.
+// Gộp vị trí mới của note đang kéo vào thứ tự đầy đủ của nhóm: note không
+// hiện trên màn hình (đang lọc/tìm kiếm) giữ nguyên chỗ cũ — chỉ mỗi note
+// đang kéo là đổi chỗ. `full` là Tag.noteIds, `visible` là id các note đang
+// hiện (đã ghim trước), newIndex là chỗ thả trong danh sách đang hiện
+// (đã trừ note đang kéo ra): chèn trước note hiện đứng sau chỗ thả, hoặc
+// ngay sau note hiện đứng trước nếu thả ở cuối danh sách đang hiện.
+export function mergeReorder(
+  full: number[],
+  visible: number[],
+  draggedId: number,
+  newIndex: number,
+): number[] {
+  const shown = visible.filter((id) => id !== draggedId);
+  if (shown.length === 0) {
+    // Note đang kéo là note duy nhất đang hiện: thả đâu trong nhóm cũng
+    // không đổi thứ tự (chỉ thêm vào cuối nếu note thiếu trong full).
+    return full.includes(draggedId) ? [...full] : [...full, draggedId];
+  }
+  const at = Math.max(0, Math.min(newIndex, shown.length));
+  const rest = full.filter((id) => id !== draggedId);
+  let pos: number;
+  if (at < shown.length) {
+    const next = rest.indexOf(shown[at]);
+    pos = next === -1 ? rest.length : next;
+  } else if (at > 0) {
+    const prev = rest.indexOf(shown[at - 1]);
+    pos = prev === -1 ? rest.length : prev + 1;
+  } else {
+    pos = rest.length;
+  }
+  rest.splice(pos, 0, draggedId);
+  return rest;
+}
+
+// Kẹp chỗ thả vào đúng tầng ghim của note đang kéo: note ghim chỉ xếp
+// giữa các note ghim, note thường chỉ xếp giữa các note thường.
+function clampToTier(index: number, visible: Note[], dragged: Note): number {
+  const shown = visible.filter((n) => n.id !== dragged.id);
+  const pinnedCount = shown.filter((n) => n.pinned).length;
+  if (dragged.pinned) return Math.max(0, Math.min(index, pinnedCount));
+  return Math.max(pinnedCount, Math.min(index, shown.length));
+}
+
+// Chỗ sẽ thả trong nhóm, tính theo điểm (x, y): đếm ô nào có tâm nằm trước
+// con trỏ theo thứ tự đọc (hàng trên trước, cùng hàng thì ô trái trước).
+function insertIndexAt(
+  x: number,
+  y: number,
+  groupTagId: number,
+  draggedIds: ReadonlySet<number>,
+): number {
+  const tiles = Array.from(
+    document.querySelectorAll(`[data-tag-group="${groupTagId}"] [data-note-id]`),
+  ).filter((el) => !draggedIds.has(Number(el.getAttribute("data-note-id"))));
+  let idx = 0;
+  for (const el of tiles) {
+    const r = (el as HTMLElement).getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    if (cy < y - r.height / 2) idx += 1;
+    else if (Math.abs(cy - y) <= r.height / 2 && cx < x) idx += 1;
+  }
+  return idx;
+}
+
+// Màu tag lưu bằng tên ("pink", "cream"); tag nào editor đã lưu bằng mã
+// hex thì dùng thẳng mã đó (hợp đồng chưa thống nhất hai dạng này).
+const tagHex = (colour: string): string =>
+  colour.startsWith("#")
+    ? colour
+    : ((TAG_COLOUR_HEX as Record<string, string>)[colour] ?? TAG_COLOUR_HEX.cream);
+
+const noteHex = (colour: string): string =>
+  (COLOUR_HEX as Record<string, string>)[colour] ?? "#e6e6e6";
+
+const colourRank = (colour: string): number => {
+  const i = (COLOURS as readonly string[]).indexOf(colour);
+  return i === -1 ? 999 : i;
+};
+
+const gridIcon = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <rect x="4" y="4" width="7" height="7" rx="1.5" />
+    <rect x="13" y="4" width="7" height="7" rx="1.5" />
+    <rect x="4" y="13" width="7" height="7" rx="1.5" />
+    <rect x="13" y="13" width="7" height="7" rx="1.5" />
+  </svg>
+);
+
+const listIcon = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9 6h11M9 12h11M9 18h11" />
+    <circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none" />
+    <circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+const trashIcon = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13M10 11v6M14 11v6" />
+  </svg>
+);
+
+const checkCircleIcon = (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="8.5" />
+    <path d="M8.5 12.2l2.4 2.4 4.6-5" />
+  </svg>
+);
+
+const pencilIcon = (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M17 3l4 4L8 20l-5 1 1-5L17 3z" />
+  </svg>
+);
+
+export default function ListPage({
+  notes,
+  tags,
+  query,
+  onQuery,
+  onOpen,
+  onTogglePin,
+  onOpenTrash,
+  onAssignTags,
+  onTrashNotes,
+  onReorder,
+  onTagsChanged,
+  onVisibleChange,
+  onToggleSelectMany,
+  deletingIds,
+  selectMode,
+  selectedIds,
+  onToggleSelect,
+  onEnterSelectMode,
+  onExitSelectMode,
+}: Props) {
+  const [dragUi, setDragUi] = useState<DragUi | null>(null);
+  const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
   const [tagOrder, setTagOrder] = useState<string[]>([]);
+  const [filterId, setFilterId] = useState<number | null>(null);
+  const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [editingTag, setEditingTag] = useState<RenameDraft | null>(null);
   const dragRef = useRef<DragState | null>(null);
+  const dragUiRef = useRef<DragUi | null>(null);
+  const cloneRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const startRef = useRef({ x: 0, y: 0, note: null as Note | null });
-  const cbRef = useRef({ onOpen, onAssignTags, onTrashNotes });
-  cbRef.current = { onOpen, onAssignTags, onTrashNotes };
+  const startRef = useRef({ x: 0, y: 0, note: null as Note | null, tagId: 0 });
+  const pillTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pillStartRef = useRef({ x: 0, y: 0, tagId: null as number | null });
+  const suppressPillClickRef = useRef(false);
+  const suppressClickUntilRef = useRef(0);
+  const cbRef = useRef({ onOpen, onAssignTags, onTrashNotes, onReorder });
+  cbRef.current = { onOpen, onAssignTags, onTrashNotes, onReorder };
   // endDrag chạy từ listener đăng ký một lần nên đọc chế độ chọn qua ref,
   // không đọc state trực tiếp (closure cũ sẽ thấy giá trị cũ).
   const modeRef = useRef({ selectMode, selectedIds });
   modeRef.current = { selectMode, selectedIds };
-  dragRef.current = drag;
-  // Kéo nhóm dùng chung listener pointermove/pointerup nên cũng đọc nhóm
-  // qua ref, không đọc trực tiếp (closure đăng ký một lần sẽ thấy nhóm cũ).
-  const groupDragRef = useRef<GroupDrag | null>(null);
-  const groupTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const groupStartRef = useRef({ x: 0, y: 0, name: null as string | null });
-  const groupDragViaTimerRef = useRef(false);
-  const suppressHeaderClickRef = useRef(false);
-  const groupsRef = useRef<{ name: string; notes: Note[] }[]>([]);
-  groupDragRef.current = groupDrag;
 
-  // Nhóm xếp theo thứ tự đã lưu; tag chưa có trong danh sách thì xếp cuối
-  // theo tên; nhóm "Chưa gắn tag" ("") luôn cuối cùng, không xếp thứ tự.
-  const sortedTags = [...tags].sort((a, b) => {
-    const ai = tagOrder.indexOf(a.name);
-    const bi = tagOrder.indexOf(b.name);
-    if (ai === -1 && bi === -1) return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
-    if (ai === -1) return 1;
-    if (bi === -1) return -1;
-    return ai - bi;
-  });
+  // Đặt lại state kéo chỉ khi giá trị rời rạc đổi (qua nhóm, vào/ra thùng
+  // rác, bắt đầu di chuyển); tọa độ con trỏ không đi qua đây.
+  const setDragUiBoth = (next: DragUi | null) => {
+    const prev = dragUiRef.current;
+    if (
+      prev === next ||
+      (prev !== null &&
+        next !== null &&
+        prev.notes === next.notes &&
+        prev.fromTagId === next.fromTagId &&
+        prev.overTagId === next.overTagId &&
+        prev.overTrash === next.overTrash &&
+        prev.moved === next.moved)
+    ) {
+      return;
+    }
+    dragUiRef.current = next;
+    setDragUi(next);
+  };
 
-  // Một note có nhiều tag thì hiện ở mỗi nhóm của nó.
-  const groups = [
-    ...sortedTags.map((t) => ({ name: t.name, notes: notes.filter((n) => n.tags.includes(t.name)) })),
-    { name: "", notes: notes.filter((n) => n.tags.length === 0) },
-  ];
+  // Bản sao kéo bay theo tay bằng transform (GPU) — ghi thẳng vào DOM,
+  // không qua React state, nên kéo không render lại danh sách.
+  const positionClone = (x: number, y: number) => {
+    const el = cloneRef.current;
+    if (el) el.style.transform = `translate3d(${x + 12}px, ${y - 20}px, 0)`;
+  };
+
+  // Khi drag mới bắt đầu thì đặt vị trí đầu của bản sao trước khi vẽ
+  // (tránh chớp một khung ở góc màn hình).
+  useLayoutEffect(() => {
+    const d = dragRef.current;
+    if (dragUi && d) positionClone(d.x, d.y);
+  }, [dragUi]);
+
+  // Nhóm + thứ tự note trong nhóm chỉ tính lại khi notes/tags/tagOrder
+  // đổi (không tính lại mỗi lần render — kéo thả render lại nhiều lần).
+  const groups: Group[] = useMemo(() => {
+    const noteById = new Map(notes.map((n) => [n.id, n]));
+    // Nhóm xếp theo thứ tự đã lưu; tag chưa có trong danh sách thì xếp cuối
+    // theo tên; nhóm "Chưa gắn tag" (id 0) luôn cuối cùng.
+    const sorted = [...tags].sort((a, b) => {
+      if (a.id === 0) return 1;
+      if (b.id === 0) return -1;
+      const ai = tagOrder.indexOf(a.name);
+      const bi = tagOrder.indexOf(b.name);
+      if (ai === -1 && bi === -1) return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+    // Note trong nhóm xếp theo Tag.noteIds (ghim trước, rồi position).
+    // Phòng hờ: note mang tên tag nhưng thiếu trong noteIds thì xếp cuối.
+    return sorted.map((t) => {
+      const picked = t.noteIds
+        .map((id) => noteById.get(id))
+        .filter((n): n is Note => n !== undefined);
+      const seen = new Set(picked.map((n) => n.id));
+      const extra = notes.filter(
+        (n) =>
+          !seen.has(n.id) &&
+          (t.id === 0 ? n.tags.length === 0 : n.tags.includes(t.name)),
+      );
+      return { tag: t, notes: [...picked, ...extra] };
+    });
+  }, [notes, tags, tagOrder]);
+  const groupsRef = useRef<Group[]>([]);
   groupsRef.current = groups;
+  const tagsById = useMemo(() => new Map(tags.map((t) => [t.id, t])), [tags]);
+  const tagsRef = useRef(tagsById);
+  tagsRef.current = tagsById;
+
+  // Màu nền khung nhóm (blendHex) cũng cache theo tags, không tính lại
+  // mỗi lần render.
+  const tints = useMemo(() => {
+    const m = new Map<number, CSSProperties | undefined>();
+    for (const t of tags) {
+      m.set(
+        t.id,
+        t.id === 0
+          ? undefined
+          : {
+              background: blendHex(tagHex(t.colour), PAGE_BG, 0.25),
+              borderColor: blendHex(tagHex(t.colour), TAGBOX_BORDER, 0.45),
+            },
+      );
+    }
+    return m;
+  }, [tags]);
+
+  const shownGroups = filterId === null ? groups : groups.filter((g) => g.tag.id === filterId);
+  // Id note đang hiện trên màn hình (đã lọc chip + tìm kiếm): App dùng để
+  // tính "Chọn tất cả" và nút chọn theo nhóm.
+  const visibleIds = shownGroups.flatMap((g) => g.notes.map((n) => n.id));
+  const visibleKey = visibleIds.join(",");
+  useEffect(() => {
+    onVisibleChange(visibleIds);
+    // Chỉ chạy lại khi tập note hiện đổi (chuỗi id), không chạy mỗi lần render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleKey]);
 
   const clearTimer = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
   };
 
-  // Nhóm tag nằm dưới điểm (x, y); "" là nhóm Chưa gắn tag, null là ngoài nhóm.
-  const groupAt = (x: number, y: number): string | null => {
+  const clearPillTimer = () => {
+    if (pillTimerRef.current) clearTimeout(pillTimerRef.current);
+    pillTimerRef.current = null;
+  };
+
+  // Nhóm tag nằm dưới điểm (x, y); 0 là nhóm Chưa gắn tag, null là ngoài nhóm.
+  const groupAt = (x: number, y: number): number | null => {
     const el = document.elementFromPoint(x, y)?.closest("[data-tag-group]");
-    return el ? (el.getAttribute("data-tag-group") ?? "") : null;
+    if (!el) return null;
+    const v = Number(el.getAttribute("data-tag-group"));
+    return Number.isNaN(v) ? null : v;
   };
 
   // Con trỏ/chạm có đang ở trên vùng thùng rác (chỉ hiện khi đang kéo).
   const trashAt = (x: number, y: number): boolean =>
     document.elementFromPoint(x, y)?.closest("[data-trash-zone]") != null;
 
-  const beginDrag = (note: Note, x: number, y: number) => {
+  const beginDrag = (note: Note, fromTagId: number, x: number, y: number) => {
     // Chế độ chọn mà note đã chọn thì kéo cả tập đã chọn (giữ thứ tự danh
     // sách); còn lại kéo đúng 1 note như cũ.
     const picked =
       modeRef.current.selectMode && modeRef.current.selectedIds.has(note.id)
         ? notes.filter((n) => modeRef.current.selectedIds.has(n.id))
         : [note];
-    const d: DragState = { notes: picked, x, y, overTag: groupAt(x, y), overTrash: false, moved: false };
+    const d: DragState = {
+      notes: picked,
+      x,
+      y,
+      fromTagId,
+      overTagId: groupAt(x, y),
+      overTrash: false,
+      moved: false,
+      insertIndex: null,
+    };
     dragRef.current = d;
-    setDrag(d);
+    setDragUiBoth({
+      notes: d.notes,
+      fromTagId: d.fromTagId,
+      overTagId: d.overTagId,
+      overTrash: false,
+      moved: false,
+    });
   };
 
   const endDrag = () => {
     const d = dragRef.current;
     dragRef.current = null;
-    setDrag(null);
-    if (!d) return;
-    if (d.moved && d.overTrash) {
-      cbRef.current.onTrashNotes(d.notes);
-    } else if (d.moved && d.overTag !== null) {
-      cbRef.current.onAssignTags(d.notes, d.overTag === "" ? null : d.overTag);
-    } else if (!d.moved && !modeRef.current.selectMode) {
-      // Chế độ chọn: cú bấm không kéo thì để click trên thẻ xử lý chọn/bỏ
-      // chọn, không mở editor (tránh chọn 2 lần).
-      cbRef.current.onOpen(d.notes[0]);
-    }
-  };
-
-  const onCardPointerDown = (note: Note, e: ReactPointerEvent) => {
-    if ((e.target as HTMLElement).closest("button")) return;
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    startRef.current = { x: e.clientX, y: e.clientY, note };
-    if (e.pointerType === "mouse") {
-      beginDrag(note, e.clientX, e.clientY);
-    } else {
-      clearTimer();
-      timerRef.current = setTimeout(() => beginDrag(note, e.clientX, e.clientY), LONG_PRESS_MS);
-    }
-  };
-
-  const clearGroupTimer = () => {
-    if (groupTimerRef.current) clearTimeout(groupTimerRef.current);
-    groupTimerRef.current = null;
-  };
-
-  // Chỗ sẽ thả nhóm đang kéo, tính theo điểm (x, y): nửa trên của một nhóm
-  // thì chèn trước nó, nửa dưới thì chèn sau nó. Trả chỉ số trong danh sách
-  // tên tag đã bỏ nhóm đang kéo (không tính nhóm "Chưa gắn tag").
-  const insertIndexAt = (x: number, y: number, draggedName: string): number => {
-    const names = groupsRef.current.map((g) => g.name).filter((n) => n !== "");
-    const draggedPos = names.indexOf(draggedName);
-    const el = document.elementFromPoint(x, y)?.closest("[data-tag-group]");
-    if (!el) {
-      const first = document.querySelector("[data-tag-group]") as HTMLElement | null;
-      if (first && y < first.getBoundingClientRect().top) return 0;
-      return names.length;
-    }
-    const name = el.getAttribute("data-tag-group") ?? "";
-    // Thả vào nhóm "Chưa gắn tag" (luôn cuối) thì nhóm về cuối cùng.
-    if (name === "") return names.length;
-    const idx = names.indexOf(name);
-    if (idx === -1) return names.length;
-    const rect = (el as HTMLElement).getBoundingClientRect();
-    const pos = y < rect.top + rect.height / 2 ? idx : idx + 1;
-    return pos > draggedPos ? pos - 1 : pos;
-  };
-
-  const beginGroupDrag = (name: string, x: number, y: number, viaTimer: boolean) => {
-    const idx = groupsRef.current.map((g) => g.name).filter((n) => n !== "").indexOf(name);
-    const d: GroupDrag = { name, x, y, moved: false, insertIndex: idx < 0 ? 0 : idx };
-    groupDragRef.current = d;
-    groupDragViaTimerRef.current = viaTimer;
-    setGroupDrag(d);
-  };
-
-  const endGroupDrag = () => {
-    const d = groupDragRef.current;
-    groupDragRef.current = null;
-    setGroupDrag(null);
+    setDragUiBoth(null);
     if (!d) return;
     if (d.moved) {
-      // Lưu thứ tự mới xuống DB ngay để tắt app mở lại vẫn giữ.
-      const order = groupsRef.current
-        .map((g) => g.name)
-        .filter((n) => n !== "" && n !== d.name);
-      order.splice(Math.min(d.insertIndex, order.length), 0, d.name);
-      setTagOrder(order);
-      void setSetting("tag_order", JSON.stringify(order)).catch(() => undefined);
+      // Bấm thả sau khi kéo thì chặn click mở note chừng 600ms.
+      suppressClickUntilRef.current = Date.now() + 600;
+      if (d.overTrash) {
+        cbRef.current.onTrashNotes(d.notes);
+        return;
+      }
+      if (d.overTagId !== null) {
+        const single = d.notes.length === 1 && !modeRef.current.selectMode;
+        if (single && d.overTagId === d.fromTagId && d.insertIndex !== null) {
+          // Kéo trong cùng một nhóm: xếp lại thứ tự, note không hiện vẫn
+          // giữ chỗ cũ (gộp bằng mergeReorder).
+          const g = groupsRef.current.find((gr) => gr.tag.id === d.overTagId);
+          if (g) {
+            const visible = g.notes.map((n) => n.id);
+            const at = clampToTier(d.insertIndex, g.notes, d.notes[0]);
+            const merged = mergeReorder(g.tag.noteIds, visible, d.notes[0].id, at);
+            if (merged.join(",") !== g.tag.noteIds.join(",")) {
+              cbRef.current.onReorder(d.overTagId, merged);
+            }
+          }
+        } else if (d.overTagId === 0) {
+          cbRef.current.onAssignTags(d.notes, null);
+        } else {
+          const target = tagsRef.current.get(d.overTagId);
+          if (target) cbRef.current.onAssignTags(d.notes, target.name);
+        }
+        return;
+      }
+      return;
     }
-    // Click sẽ nổ ngay sau pointerup nếu không kéo (chuột) hoặc nhấn giữ
-    // rồi thả mà không kéo (cảm ứng): chặn click đó để bấm không bị đổi
-    // trạng thái nhóm hai lần. Bấm thường (không kéo) thì để click thu
-    // gọn/mở nhóm như cũ.
-    if (d.moved || groupDragViaTimerRef.current) suppressHeaderClickRef.current = true;
+    if (!modeRef.current.selectMode) cbRef.current.onOpen(d.notes[0]);
   };
 
-  // Nhóm "Chưa gắn tag" luôn cuối cùng nên không kéo được, chỉ bấm thu gọn.
-  const onGroupPointerDown = (name: string, e: ReactPointerEvent) => {
-    if (!name) return;
-    suppressHeaderClickRef.current = false;
+  const onCardPointerDown = (note: Note, groupTagId: number, e: ReactPointerEvent) => {
+    if ((e.target as HTMLElement).closest("button")) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    groupStartRef.current = { x: e.clientX, y: e.clientY, name };
+    // Chế độ chọn: chỉ note đã chọn mới kéo được (kéo cả tập đã chọn);
+    // bấm note chưa chọn thì để click xử lý chọn/bỏ chọn.
+    if (modeRef.current.selectMode && !modeRef.current.selectedIds.has(note.id)) return;
+    startRef.current = { x: e.clientX, y: e.clientY, note, tagId: groupTagId };
     if (e.pointerType === "mouse") {
-      beginGroupDrag(name, e.clientX, e.clientY, false);
+      beginDrag(note, groupTagId, e.clientX, e.clientY);
     } else {
-      clearGroupTimer();
-      groupTimerRef.current = setTimeout(
-        () => beginGroupDrag(name, e.clientX, e.clientY, true),
+      clearTimer();
+      timerRef.current = setTimeout(
+        () => beginDrag(note, groupTagId, e.clientX, e.clientY),
         LONG_PRESS_MS,
       );
     }
+  };
+
+  const handleCardClick = (note: Note) => {
+    if (Date.now() < suppressClickUntilRef.current) return;
+    if (selectMode) onToggleSelect(note);
+    else onOpen(note);
   };
 
   useEffect(() => () => clearTimer(), []);
@@ -232,53 +471,61 @@ export default function ListPage({ notes, tags, query, onQuery, onOpen, onToggle
         const moved =
           d.moved ||
           Math.hypot(e.clientX - startRef.current.x, e.clientY - startRef.current.y) > MOVE_PX;
+        const overTagId = groupAt(e.clientX, e.clientY);
+        const overTrash = trashAt(e.clientX, e.clientY);
+        // Chỉ tính chỗ chèn khi kéo 1 note trong cùng nhóm (xếp lại);
+        // kéo sang nhóm khác hoặc kéo nhiều thì không cần.
+        let insertIndex: number | null = null;
+        if (
+          moved &&
+          !overTrash &&
+          overTagId !== null &&
+          overTagId === d.fromTagId &&
+          d.notes.length === 1 &&
+          !modeRef.current.selectMode
+        ) {
+          insertIndex = insertIndexAt(
+            e.clientX,
+            e.clientY,
+            overTagId,
+            new Set([d.notes[0].id]),
+          );
+        }
         const next: DragState = {
           ...d,
           x: e.clientX,
           y: e.clientY,
-          overTag: groupAt(e.clientX, e.clientY),
-          overTrash: trashAt(e.clientX, e.clientY),
+          overTagId,
+          overTrash,
           moved,
+          insertIndex,
         };
         dragRef.current = next;
-        setDrag(next);
+        // Bản sao bay theo tay bằng transform, không render lại danh sách;
+        // chỉ cập nhật state khi giá trị rời rạc đổi (qua nhóm, vào/ra
+        // thùng rác, bắt đầu di chuyển).
+        positionClone(e.clientX, e.clientY);
+        setDragUiBoth({ notes: d.notes, fromTagId: d.fromTagId, overTagId, overTrash, moved });
         return;
       }
       // Chưa nhấc lên mà tay đã trượt đi: đó là cuộn trang, hủy hẹn giờ.
       const s = startRef.current;
       if (s.note && Math.hypot(e.clientX - s.x, e.clientY - s.y) > MOVE_PX) {
         clearTimer();
-        startRef.current = { x: 0, y: 0, note: null };
+        startRef.current = { x: 0, y: 0, note: null, tagId: 0 };
       }
-      const gd = groupDragRef.current;
-      if (gd) {
-        const moved =
-          gd.moved ||
-          Math.hypot(e.clientX - groupStartRef.current.x, e.clientY - groupStartRef.current.y) > MOVE_PX;
-        const next: GroupDrag = {
-          ...gd,
-          x: e.clientX,
-          y: e.clientY,
-          moved,
-          insertIndex: moved ? insertIndexAt(e.clientX, e.clientY, gd.name) : gd.insertIndex,
-        };
-        groupDragRef.current = next;
-        setGroupDrag(next);
-        return;
-      }
-      const gs = groupStartRef.current;
-      if (gs.name && Math.hypot(e.clientX - gs.x, e.clientY - gs.y) > MOVE_PX) {
-        clearGroupTimer();
-        groupStartRef.current = { x: 0, y: 0, name: null };
+      const p = pillStartRef.current;
+      if (p.tagId !== null && Math.hypot(e.clientX - p.x, e.clientY - p.y) > MOVE_PX) {
+        clearPillTimer();
+        pillStartRef.current = { x: 0, y: 0, tagId: null };
       }
     };
     const onUp = () => {
       clearTimer();
-      clearGroupTimer();
-      startRef.current = { x: 0, y: 0, note: null };
+      clearPillTimer();
+      startRef.current = { x: 0, y: 0, note: null, tagId: 0 };
+      pillStartRef.current = { x: 0, y: 0, tagId: null };
       if (dragRef.current) endDrag();
-      if (groupDragRef.current) endGroupDrag();
-      groupStartRef.current = { x: 0, y: 0, name: null };
     };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
@@ -288,24 +535,27 @@ export default function ListPage({ notes, tags, query, onQuery, onOpen, onToggle
       window.removeEventListener("pointerup", onUp);
       window.removeEventListener("pointercancel", onUp);
     };
+    // Listener đăng ký một lần, đọc mọi trạng thái qua ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Đang kéo (note hay nhóm) thì chặn cuộn trang bằng tay; chưa kéo thì
-  // cuộn bình thường.
+  // Đang kéo thì chặn cuộn trang bằng tay; chưa kéo thì cuộn bình thường.
   useEffect(() => {
-    if (!drag && !groupDrag) return;
+    if (!dragUi) return;
     const block = (e: TouchEvent) => e.preventDefault();
     window.addEventListener("touchmove", block, { passive: false });
     return () => window.removeEventListener("touchmove", block);
-  }, [drag, groupDrag]);
+  }, [dragUi]);
 
-  const toggleGroup = (name: string) => {
+  const toggleGroup = (tagId: number) => {
     const next = { ...collapsed };
-    if (next[name]) delete next[name];
-    else next[name] = true;
+    if (next[tagId]) delete next[tagId];
+    else next[tagId] = true;
     setCollapsed(next);
     // Ghi xuống DB ngay để tắt app mở lại vẫn giữ trạng thái nhóm.
-    void setSetting("collapsed_groups", JSON.stringify(Object.keys(next))).catch(() => undefined);
+    void setSetting("collapsed_groups", JSON.stringify(Object.keys(next).map(Number))).catch(
+      () => undefined,
+    );
   };
 
   // Nhóm nào đang thu gọn được lưu trong DB (ListPage unmount mỗi lần mở
@@ -316,10 +566,12 @@ export default function ListPage({ notes, tags, query, onQuery, onOpen, onToggle
       .then((v) => {
         if (!v) return;
         try {
-          const names = JSON.parse(v) as string[];
-          setCollapsed(Object.fromEntries(names.map((n) => [n, true])));
+          const ids = JSON.parse(v) as unknown[];
+          setCollapsed(
+            Object.fromEntries(ids.filter((n) => typeof n === "number").map((n) => [n, true])),
+          );
         } catch {
-          // Giá trị cũ hỏng thì bỏ qua, mặc định mở hết nhóm.
+          // Giá trị cũ (tên tag, bản v17 trở về trước) thì bỏ qua, mặc định mở hết.
         }
       })
       .catch(() => undefined);
@@ -336,22 +588,87 @@ export default function ListPage({ notes, tags, query, onQuery, onOpen, onToggle
       .catch(() => undefined);
   }, []);
 
+  // --- Đổi tên tag ngay trên tiêu đề nhóm (nhấn giữ tên tag) ---
+
+  const startRename = (tag: Tag) =>
+    setEditingTag({ id: tag.id, name: tag.name, icon: tag.icon, colour: tag.colour });
+
+  const saveRename = async () => {
+    if (!editingTag) return;
+    const name = editingTag.name.trim();
+    if (!name) {
+      toast("Tên tag không được để trống.", "error");
+      return;
+    }
+    try {
+      // Lưu tên + icon + màu trong MỘT lần gọi; trùng tên thì backend báo
+      // lỗi ("Tên tag này đã có rồi.") và hiện toast đỏ, ở lại form sửa.
+      await renameTag(editingTag.id, name, editingTag.icon, editingTag.colour);
+      setEditingTag(null);
+      onTagsChanged();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : String(e), "error");
+    }
+  };
+
+  const onPillPointerDown = (tag: Tag, e: ReactPointerEvent) => {
+    // Nhóm Chưa gắn tag không đổi được; chế độ chọn thì tắt đổi tên.
+    if (tag.id === 0 || selectMode) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    pillStartRef.current = { x: e.clientX, y: e.clientY, tagId: tag.id };
+    clearPillTimer();
+    pillTimerRef.current = setTimeout(() => {
+      suppressPillClickRef.current = true;
+      pillStartRef.current = { x: 0, y: 0, tagId: null };
+      startRename(tag);
+    }, LONG_PRESS_MS);
+  };
+
+  const onPillClick = (tagId: number) => {
+    // Nhấn giữ rồi thả thì click nổ ngay sau đó: chặn để khỏi thu gọn/mở
+    // nhóm hai lần. Bấm thường thì để click thu gọn/mở như cũ.
+    if (suppressPillClickRef.current) {
+      suppressPillClickRef.current = false;
+      return;
+    }
+    toggleGroup(tagId);
+  };
+
   return (
-    <main className="page list-page">
+    <main className="page">
       {selectMode ? (
         <header className="toolbar">
           <h1>Đã chọn {selectedIds.size}</h1>
-          <button onClick={onExitSelectMode}>Hủy</button>
+          <button type="button" onClick={onExitSelectMode}>
+            Hủy
+          </button>
         </header>
       ) : (
         <header className="toolbar">
           <h1>Ghi chú</h1>
-          <button onClick={onEnterSelectMode}>Chọn</button>
-          <button onClick={onOpenTags}>Quản lý tag</button>
-          <button onClick={onOpenTrash}>Thùng rác</button>
-          <button onClick={onOpenBackup}>Sao lưu</button>
-          <button className="add-btn" onClick={onNew} aria-label="Thêm ghi chú">
-            +
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => setViewMode(viewMode === "grid" ? "list" : "grid")}
+            aria-label={viewMode === "grid" ? "Xem dạng danh sách" : "Xem dạng lưới"}
+          >
+            {viewMode === "grid" ? listIcon : gridIcon}
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onOpenTrash}
+            aria-label="Thùng rác"
+          >
+            {trashIcon}
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={onEnterSelectMode}
+            aria-label="Chọn nhiều ghi chú"
+          >
+            {checkCircleIcon}
           </button>
         </header>
       )}
@@ -363,102 +680,256 @@ export default function ListPage({ notes, tags, query, onQuery, onOpen, onToggle
         onChange={(e) => onQuery(e.currentTarget.value)}
       />
       {notes.length === 0 ? (
-        <p className="empty">Chưa có ghi chú nào. Bấm + để tạo ghi chú đầu tiên.</p>
+        query.trim() ? (
+          <div className="empty-state">
+            <p>
+              <strong>Không tìm thấy ghi chú nào</strong>
+            </p>
+            <p>Thử từ khóa khác nhé.</p>
+          </div>
+        ) : (
+          <div className="empty-state">
+            <p>
+              <strong>Chưa có ghi chú nào</strong>
+            </p>
+            <p>Bấm + để tạo ghi chú đầu tiên.</p>
+          </div>
+        )
       ) : (
         <>
-          <p className="drag-hint">
-            {selectMode
-              ? "Bấm thẻ để chọn, nhấn giữ một thẻ đã chọn để kéo cả nhóm đi."
-              : "Nhấn giữ một ghi chú rồi kéo vào nhóm tag để gắn tag, hoặc kéo xuống thùng rác để xóa. Nhấn giữ tiêu đề nhóm để kéo đổi thứ tự nhóm."}
-          </p>
-          {groups.map((g) => {
-            // Vạch chèn tính theo danh sách đã bỏ nhóm đang kéo ra: nhóm
-            // nào đứng sau nhóm đang kéo thì chỉ số lùi xuống 1; nhóm "Chưa
-            // gắn tag" là cuối cùng nên khe của nó là sau tất cả các tag.
-            const draggedIdx = groupDrag
-              ? sortedTags.findIndex((t) => t.name === groupDrag.name)
-              : -1;
-            const j =
-              g.name === "" ? sortedTags.length : sortedTags.findIndex((t) => t.name === g.name);
-            const slot = j - (draggedIdx >= 0 && j > draggedIdx ? 1 : 0);
-            return (
-              <Fragment key={g.name || "none"}>
-                {groupDrag?.moved && groupDrag.insertIndex === slot ? (
-                  <div className="insert-line" />
-                ) : null}
-                <section
-                  key={g.name || "none"}
-                  className={`tag-group${drag && drag.overTag === g.name ? " drop-target" : ""}${groupDrag?.name === g.name ? " group-dragging" : ""}`}
-                  data-tag-group={g.name}
-                >
+          <div className="filter-chips" aria-label="Lọc theo tag">
+            <button
+              type="button"
+              className={`filter-chip${filterId === null ? " selected" : ""}`}
+              onClick={() => setFilterId(null)}
+            >
+              Tất cả
+            </button>
+            {/* list_tags đã trả nhóm id 0 ở cuối nên chip "Chưa gắn tag"
+                chỉ hiện 1 lần, và chỉ khi nhóm đó đang có note. */}
+            {tags
+              .filter((t) => t.id !== 0)
+              .map((t) => (
                 <button
+                  key={t.id}
                   type="button"
-                  className="group-header"
-                  aria-expanded={!collapsed[g.name]}
-                  onPointerDown={(e) => onGroupPointerDown(g.name, e)}
-                  onClick={() => {
-                    if (suppressHeaderClickRef.current) {
-                      suppressHeaderClickRef.current = false;
-                      return;
-                    }
-                    toggleGroup(g.name);
-                  }}
+                  className={`filter-chip${filterId === t.id ? " selected" : ""}`}
+                  onClick={() => setFilterId(t.id)}
                 >
-                  <span>{g.name === "" ? "Chưa gắn tag" : g.name}</span>
-                  <span>
-                    {g.notes.length} ghi chú {collapsed[g.name] ? "▸" : "▾"}
-                  </span>
+                  <TagIcon id={t.icon} size={14} />
+                  {t.name}
                 </button>
-              {!collapsed[g.name] &&
-                (g.notes.length === 0 ? (
-                  <p className="group-empty">
-                    {g.name === ""
-                      ? "Kéo ghi chú vào đây để gỡ hết tag."
-                      : "Kéo ghi chú vào đây để gắn tag này."}
-                  </p>
-                ) : (
-                  <div className="note-list">
-                    {g.notes.map((n) => (
-                      <NoteCard
-                        key={`${g.name}-${n.id}`}
-                        note={n}
-                        onOpen={(note) => {
-                          if (selectMode) onToggleSelect(note);
-                          else onOpen(note);
+              ))}
+            {tags.some((t) => t.id === 0) ? (
+              <button
+                type="button"
+                className={`filter-chip${filterId === 0 ? " selected" : ""}`}
+                onClick={() => setFilterId(0)}
+              >
+                Chưa gắn tag
+              </button>
+            ) : null}
+          </div>
+          {shownGroups.length === 0 ? (
+            <div className="empty-state">
+              <p>
+                <strong>Nhóm này chưa có ghi chú</strong>
+              </p>
+              <p>Kéo ghi chú vào nhóm để thêm.</p>
+            </div>
+          ) : null}
+          {shownGroups.map((g) => {
+            const tag = g.tag;
+            // Tag có màu thì khung nhóm nhuộm nhạt theo màu tag (đã cache
+            // trong `tints`); nhóm Chưa gắn tag dùng nền mặc định của .tagbox.
+            // Chấm màu khi nhóm thu gọn: một chấm cho mỗi màu note khác nhau
+            // trong nhóm, xếp theo thứ tự bảng màu (cầu vồng), không theo
+            // thứ tự note xuất hiện.
+            const dots = [...new Set(g.notes.map((n) => n.colour))].sort(
+              (a, b) => colourRank(a) - colourRank(b),
+            );
+            // Chế độ chọn: nút "N note" ở đầu nhóm chọn/bỏ chọn cả nhóm.
+            const groupIds = g.notes.map((n) => n.id);
+            const groupAllSelected =
+              groupIds.length > 0 && groupIds.every((id) => selectedIds.has(id));
+            const editing = editingTag !== null && editingTag.id === tag.id;
+            return (
+              <section
+                key={tag.id}
+                className={`tag-group tagbox${dragUi && dragUi.overTagId === tag.id ? " drop-target" : ""}`}
+                data-tag-group={tag.id}
+                style={tints.get(tag.id)}
+              >
+                <div className="group-head">
+                  <button
+                    type="button"
+                    className="tag-pill"
+                    style={tag.id === 0 ? undefined : { background: tagHex(tag.colour) }}
+                    aria-expanded={!collapsed[tag.id]}
+                    onPointerDown={(e) => onPillPointerDown(tag, e)}
+                    onClick={() => onPillClick(tag.id)}
+                  >
+                    <TagIcon id={tag.icon} size={14} />
+                    {tag.name}
+                  </button>
+                  {collapsed[tag.id] && dots.length > 0 ? (
+                    <span className="colour-dots" aria-hidden="true">
+                      {dots.map((c) => (
+                        <span
+                          key={c}
+                          className="dot"
+                          style={{ background: noteHex(c) }}
+                        />
+                      ))}
+                    </span>
+                  ) : null}
+                  {filterId !== null && filterId === tag.id && tag.id !== 0 && !selectMode ? (
+                    <button
+                      type="button"
+                      className="icon-btn small"
+                      onClick={() => startRename(tag)}
+                      aria-label={`Đổi tên tag ${tag.name}`}
+                    >
+                      {pencilIcon}
+                    </button>
+                  ) : null}
+                  {selectMode ? (
+                    <button
+                      type="button"
+                      className={`group-count count-btn${groupAllSelected ? " all" : ""}`}
+                      onClick={() => onToggleSelectMany(groupIds, !groupAllSelected)}
+                      aria-label={
+                        groupAllSelected
+                          ? `Bỏ chọn ${groupIds.length} ghi chú trong nhóm ${tag.name}`
+                          : `Chọn ${groupIds.length} ghi chú trong nhóm ${tag.name}`
+                      }
+                    >
+                      {groupAllSelected ? "✓ " : ""}
+                      {g.notes.length} note
+                    </button>
+                  ) : (
+                    <span className="group-count">{g.notes.length} note</span>
+                  )}
+                </div>
+                {editing && editingTag ? (
+                  <div className="rename-editor">
+                    <div className="rename-row">
+                      <input
+                        className="rename-input"
+                        value={editingTag.name}
+                        autoFocus
+                        aria-label="Tên tag"
+                        onChange={(e) =>
+                          setEditingTag({ ...editingTag, name: e.currentTarget.value })
+                        }
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                            e.preventDefault();
+                            void saveRename();
+                          }
+                          if (e.key === "Escape") setEditingTag(null);
                         }}
-                        onTogglePin={onTogglePin}
-                        onPointerDown={onCardPointerDown}
-                        dragging={drag?.notes.some((d) => d.id === n.id)}
-                        selectMode={selectMode}
-                        selected={selectedIds.has(n.id)}
                       />
-                    ))}
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={() => void saveRename()}
+                        aria-label="Lưu tên tag"
+                      >
+                        ✓
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-btn"
+                        onClick={() => setEditingTag(null)}
+                        aria-label="Hủy đổi tên"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <div className="icon-picker" role="group" aria-label="Icon của tag">
+                      {TAG_ICON_IDS.map((id) => (
+                        <button
+                          key={id}
+                          type="button"
+                          className={`icon-pick${editingTag.icon === id ? " selected" : ""}`}
+                          onClick={() => setEditingTag({ ...editingTag, icon: id })}
+                          aria-label={
+                            id === "none" ? "Không dùng icon" : `Icon ${id}`
+                          }
+                          aria-pressed={editingTag.icon === id}
+                        >
+                          {id === "none" ? (
+                            <span className="icon-none">Không</span>
+                          ) : (
+                            <TagIcon id={id} size={20} />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="swatch-row" role="group" aria-label="Màu của tag">
+                      {TAG_COLOURS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={`colour-dot colour-${c}${tagHex(editingTag.colour) === TAG_COLOUR_HEX[c] ? " selected" : ""}`}
+                          onClick={() =>
+                            setEditingTag({ ...editingTag, colour: c })
+                          }
+                          aria-label={`Màu ${c}`}
+                          aria-pressed={tagHex(editingTag.colour) === TAG_COLOUR_HEX[c]}
+                        >
+                          {tagHex(editingTag.colour) === TAG_COLOUR_HEX[c] ? "✓" : ""}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                ) : null}
+                {!collapsed[tag.id] &&
+                  (g.notes.length === 0 ? (
+                    <p className="group-empty">
+                      {tag.id === 0
+                        ? "Kéo ghi chú vào đây để gỡ hết tag."
+                        : "Kéo ghi chú vào đây để gắn tag này."}
+                    </p>
+                  ) : (
+                    <div className={`note-list${viewMode === "list" ? " list-view" : ""}`}>
+                      {g.notes.map((n) => (
+                        <NoteCard
+                          key={n.id}
+                          note={n}
+                          onOpen={handleCardClick}
+                          onTogglePin={onTogglePin}
+                          onPointerDown={(note, e) => onCardPointerDown(note, tag.id, e)}
+                          dragging={
+                            dragUi !== null &&
+                            dragUi.fromTagId === tag.id &&
+                            dragUi.notes.some((d) => d.id === n.id)
+                          }
+                          deleting={deletingIds.has(n.id)}
+                          selectMode={selectMode}
+                          selected={selectedIds.has(n.id)}
+                        />
+                      ))}
+                    </div>
+                  ))}
               </section>
-              </Fragment>
             );
           })}
         </>
       )}
-      {drag ? (
-        <div
-          className={`trash-zone${drag.overTrash ? " drop-target" : ""}`}
-          data-trash-zone
-        >
+      {dragUi ? (
+        <div className={`trash-zone${dragUi.overTrash ? " drop-target" : ""}`} data-trash-zone>
           Thùng rác — thả vào đây để xóa
         </div>
       ) : null}
-      {drag ? (
-        <div className="drag-clone" style={{ left: drag.x + 12, top: drag.y - 20 }}>
-          {drag.notes.length > 1
-            ? `${drag.notes.length} ghi chú`
-            : drag.notes[0].title.trim() || "Ghi chú mới"}
-        </div>
-      ) : null}
-      {groupDrag && groupDrag.moved ? (
-        <div className="drag-clone" style={{ left: groupDrag.x + 12, top: groupDrag.y - 20 }}>
-          Nhóm {groupDrag.name}
+      {dragUi ? (
+        <div ref={cloneRef} className="drag-clone-pos" aria-hidden="true">
+          <div className="drag-clone">
+            {dragUi.notes.length > 1
+              ? `${dragUi.notes.length} ghi chú`
+              : dragUi.notes[0].title.trim() || "Ghi chú mới"}
+          </div>
         </div>
       ) : null}
     </main>

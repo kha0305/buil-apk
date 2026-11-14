@@ -4,7 +4,7 @@
 //! - Tìm tiếng Việt: lọc bằng Rust `to_lowercase()` (Unicode-aware),
 //!   không dùng `LIKE` của SQLite (chỉ gập case ASCII).
 
-use crate::db::{all_tags_map, db_err, exec_one, get_note, lock, now_millis, row_to_note, DbState, COLS};
+use crate::db::{all_tags_map, db_err, ensure_order_row, exec_one, get_note, lock, now_millis, row_to_note, DbState, COLS};
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -90,15 +90,21 @@ fn attach_tags(mut notes: Vec<Note>, tags: &HashMap<i64, Vec<String>>) -> Vec<No
 }
 
 pub fn create_note(state: &DbState, input: NewNote) -> Result<Note, String> {
-    let conn = lock(state)?;
+    let mut conn = lock(state)?;
     let now = now_millis();
-    conn.execute(
-        "INSERT INTO notes (title, content, colour, pinned, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5)",
-        params![input.title, input.content, input.colour, input.pinned as i64, now],
-    )
-    .map_err(db_err)?;
-    let id = conn.last_insert_rowid();
+    let id = {
+        let tx = conn.transaction().map_err(db_err)?;
+        tx.execute(
+            "INSERT INTO notes (title, content, colour, pinned, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5)",
+            params![input.title, input.content, input.colour, input.pinned as i64, now],
+        )
+        .map_err(db_err)?;
+        let id = tx.last_insert_rowid();
+        ensure_order_row(&tx, 0, id)?;
+        tx.commit().map_err(db_err)?;
+        id
+    };
     Ok(Note {
         id,
         title: input.title,
@@ -412,6 +418,15 @@ mod tests {
             .query_row("SELECT COUNT(*) FROM note_tags", [], |r| r.get(0))
             .unwrap();
         assert_eq!(count, 0);
+        let order_count: i64 = db
+            .db
+            .lock()
+            .unwrap()
+            .query_row("SELECT COUNT(*) FROM note_order WHERE note_id = ?1", params![a.id], |r| {
+                r.get(0)
+            })
+            .unwrap();
+        assert_eq!(order_count, 0, "dòng note_order của note xóa hẳn phải mất theo CASCADE");
     }
 
     #[test]

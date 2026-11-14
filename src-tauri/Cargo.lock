@@ -1059,6 +1059,8 @@ dependencies = [
 name = "ghi-chu"
 version = "0.1.0"
 dependencies = [
+ "jni",
+ "ndk-context",
  "rusqlite",
  "serde",
  "serde_json",

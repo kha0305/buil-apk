@@ -1,44 +1,58 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { exit, onBackButtonPress } from "@tauri-apps/api/app";
+import { listen } from "@tauri-apps/api/event";
 import type { Note, Tag } from "./lib/types";
-import { beep } from "./lib/beep";
+import { toast } from "./lib/toast";
+import {
+  checkRemindersNow,
+  startReminderPoll,
+  type DueReminder,
+} from "./lib/reminderPoll";
+import ReminderDialog from "./components/ReminderDialog";
 import {
   createNote,
   isTauri,
   listNotes,
   listTags,
+  reorderNotes,
   searchNotes,
   setNoteTags,
-  setReminder,
   togglePin,
   trashNote,
 } from "./services/notesApi";
 import ListPage from "./pages/ListPage";
 import EditorPage from "./pages/EditorPage";
 import TrashPage from "./pages/TrashPage";
-import TagsPage from "./pages/TagsPage";
 import BackupPage from "./pages/BackupPage";
+import BottomNav, { type NavView } from "./components/BottomNav";
+import ToastHost from "./components/ToastHost";
 import "./styles.css";
 
-type View = { name: "list" } | { name: "editor"; note: Note } | { name: "trash" } | { name: "tags" } | { name: "backup" };
+type View = { name: "list" } | { name: "editor"; note: Note } | { name: "trash" } | { name: "backup" };
 
 export default function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [tags, setTags] = useState<Tag[]>([]);
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>({ name: "list" });
-  const [error, setError] = useState("");
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(new Set());
+  // Id note đang hiện trên màn hình chính (đã lọc chip + tìm kiếm):
+  // ListPage báo lên để tính "Chọn tất cả".
+  const [visibleIds, setVisibleIds] = useState<number[]>([]);
+  // Note đang cho vào thùng rác: mờ + co lại ~350ms rồi mới xóa thật.
+  const [deletingIds, setDeletingIds] = useState<ReadonlySet<number>>(new Set());
   // Note tới giờ nhắc hẹn, đang chờ người dùng bấm mở hoặc đóng bảng.
-  const [due, setDue] = useState<Note[]>([]);
-  // Id note đã hiện bảng nhắc trong phiên này (tránh nhắc lại nhiều lần).
-  const shownRef = useRef<Set<number>>(new Set());
+  const [due, setDue] = useState<DueReminder[]>([]);
   const viewRef = useRef(view);
   viewRef.current = view;
   // Nút Back chạy từ listener đăng ký một lần nên đọc chế độ chọn qua ref.
   const selectModeRef = useRef(false);
   selectModeRef.current = selectMode;
+  const visibleKeyRef = useRef("");
+
+  // Phản hồi lỗi duy nhất là toast đỏ (không còn banner lỗi, không alert).
+  const fail = (e: unknown) => toast(e instanceof Error ? e.message : String(e), "error");
 
   const exitSelectMode = useCallback(() => {
     setSelectMode(false);
@@ -54,19 +68,58 @@ export default function App() {
     });
   }, []);
 
+  // Chọn/bỏ chọn một loạt id (nút chọn theo nhóm ở đầu mỗi nhóm tag).
+  const toggleSelectMany = useCallback((ids: number[], select: boolean) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      ids.forEach((id) => {
+        if (select) next.add(id);
+        else next.delete(id);
+      });
+      return next;
+    });
+  }, []);
+
+  // ListPage báo tập note đang hiện; chỉ cập nhật khi tập đó đổi hẳn
+  // (tránh render lặp: ListPage gọi mỗi lần tập hiện đổi).
+  const handleVisibleChange = useCallback((ids: number[]) => {
+    const key = ids.join(",");
+    if (key === visibleKeyRef.current) return;
+    visibleKeyRef.current = key;
+    setVisibleIds(ids);
+  }, []);
+
+  // "Chọn tất cả" chỉ chọn note đang hiện (đã lọc chip + tìm kiếm);
+  // bấm lần nữa thành "Bỏ chọn hết" (bỏ chọn tất cả, kể cả note đã chọn
+  // trước đó ngoài vùng hiện).
+  const allSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id));
+  const toggleSelectAll = useCallback(() => {
+    if (allSelected) setSelectedIds(new Set());
+    else setSelectedIds((prev) => new Set([...prev, ...visibleIds]));
+  }, [allSelected, visibleIds]);
+
   const reload = useCallback(async (q: string) => {
     try {
       setNotes(q.trim() ? await searchNotes(q) : await listNotes());
       setTags(await listTags());
-      setError("");
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      fail(e);
     }
+  }, []);
+
+// Gỡ màn chờ inline trong index.html sau lần render đầu — kể cả khi danh
+  // sách trống hay tải lỗi, màn chờ không được kẹt lại. Effect chạy 1 lần
+  // lúc mount, sau khi giao diện đã render xong.
+  useEffect(() => {
+    document.getElementById("loading")?.remove();
   }, []);
 
   useEffect(() => {
     if (!isTauri()) {
-      setError("Mở app qua Tauri mới có dữ liệu (mở bằng trình duyệt thường sẽ không gọi được lệnh Rust).");
+      toast(
+        "Mở app qua Tauri mới có dữ liệu (mở bằng trình duyệt thường sẽ không gọi được lệnh Rust).",
+        "error",
+      );
       return;
     }
     void reload("");
@@ -102,24 +155,32 @@ export default function App() {
     setView({ name: "trash" });
   };
 
-  const openTags = () => {
-    exitSelectMode();
-    setView({ name: "tags" });
-  };
-
   const openBackup = () => {
     exitSelectMode();
     setView({ name: "backup" });
   };
 
+  // Bấm mục trên thanh dưới: về danh sách (thoát chế độ chọn nếu đang
+  // chọn) hoặc mở màn thùng rác / sao lưu.
+  const goNav = (target: NavView) => {
+    if (target === "list") {
+      exitSelectMode();
+      setView({ name: "list" });
+    } else if (target === "trash") {
+      openTrash();
+    } else {
+      openBackup();
+    }
+  };
+
   const newNote = async () => {
     try {
       exitSelectMode();
-      const created = await createNote({ title: "", content: "", colour: "yellow", pinned: false });
+      const created = await createNote({ title: "", content: "", colour: "white", pinned: false });
       setNotes((prev) => [created, ...prev]);
       setView({ name: "editor", note: created });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      fail(e);
     }
   };
 
@@ -131,7 +192,7 @@ export default function App() {
         setView({ name: "editor", note: saved });
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      fail(e);
     }
   };
 
@@ -148,7 +209,7 @@ export default function App() {
     try {
       setTags(await listTags());
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      fail(e);
     }
   }, []);
 
@@ -162,7 +223,7 @@ export default function App() {
       try {
         onSaved(await setNoteTags(note.id, next));
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
+        fail(e);
         return;
       }
     }
@@ -170,74 +231,100 @@ export default function App() {
   };
 
   // Cho một hoặc nhiều note vào thùng rác; về danh sách sau khi xong.
-  const trashNotes = async (picked: Note[]) => {
+  // Trả về số note đã xóa được (đường editor đã tự toast nên hàm này
+  // không toast; đường danh sách toast ở trashWithEffect).
+  const trashNotes = async (picked: Note[]): Promise<number> => {
+    let done = 0;
     for (const note of picked) {
       try {
         await trashNote(note.id);
         setNotes((prev) => prev.filter((n) => n.id !== note.id));
+        done += 1;
       } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        return;
+        fail(e);
+        return done;
       }
     }
     await reloadTags();
     exitSelectMode();
     setView({ name: "list" });
+    return done;
   };
 
-  // Nhắc hẹn: CHỈ nhắc khi app đang mở. Đọc thẳng DB mỗi lần kiểm (kể cả
-  // khi đang tìm kiếm, danh sách trên màn hình có thể thiếu note cần nhắc):
-  // note nào tới giờ mà chưa hiện trong phiên này thì hiện bảng nhắc, kêu
-  // một tiếng, rồi gỡ nhắc hẹn để chỉ nhắc một lần duy nhất.
-  const checkDue = useCallback(async () => {
-    let all: Note[];
-    try {
-      all = await listNotes();
-    } catch {
-      return;
-    }
-    const now = Date.now();
-    const dueNotes = all.filter(
-      (n) => n.remindAt != null && n.remindAt <= now && !shownRef.current.has(n.id),
-    );
-    if (dueNotes.length === 0) return;
-    dueNotes.forEach((n) => shownRef.current.add(n.id));
-    setDue((prev) => [...prev, ...dueNotes.filter((n) => !prev.some((p) => p.id === n.id))]);
-    beep();
-    for (const n of dueNotes) {
-      try {
-        const saved = await setReminder(n.id, null);
-        setNotes((prev) => prev.map((x) => (x.id === saved.id ? saved : x)));
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-      }
-    }
-  }, []);
+  // Cho vào thùng rác kèm hiệu ứng mờ + co lại: đánh dấu note đang xóa,
+  // chờ ~350ms cho hiệu ứng chạy xong rồi mới xóa thật, xong thì toast
+  // báo số note đã xóa.
+  const trashWithEffect = (picked: Note[]) => {
+    if (picked.length === 0) return;
+    setDeletingIds(new Set(picked.map((n) => n.id)));
+    window.setTimeout(() => {
+      void trashNotes(picked).then((done) => {
+        if (done > 0) toast(`Đã cho ${done} ghi chú vào thùng rác.`);
+        setDeletingIds((prev) => {
+          if (prev.size === 0) return prev;
+          const next = new Set(prev);
+          picked.forEach((n) => next.delete(n.id));
+          return next;
+        });
+      });
+    }, 350);
+  };
 
-  // Kiểm tra mỗi 60 giây, và mỗi khi danh sách note đổi (kể cả lúc mở app
-  // tải xong) để nhắc hẹn không bị muộn quá một phút.
+  // Kéo xếp lại thứ tự note trong một nhóm: ghi thứ tự mới xuống DB rồi
+  // tải lại tag (noteIds mới) để danh sách hiện đúng thứ tự.
+  const reorder = async (tagId: number, orderedIds: number[]) => {
+    try {
+      await reorderNotes(tagId, orderedIds);
+      await reloadTags();
+    } catch (e) {
+      fail(e);
+    }
+  };
+
+  // Nhắc hẹn trong app (v18): poller kiểm mỗi 60 giây + khi danh sách đổi,
+  // mở bảng nhắc cho note tới giờ; note từ thông báo native thì mở thẳng.
   useEffect(() => {
     if (!isTauri()) return;
-    void checkDue();
-    const timer = setInterval(() => void checkDue(), 60_000);
-    return () => clearInterval(timer);
-  }, [checkDue]);
+    const stop = startReminderPoll({
+      onDue: (items) =>
+        setDue((prev) => [
+          ...prev,
+          ...items.filter((d) => !prev.some((p) => p.note.id === d.note.id)),
+        ]),
+      onOpenNote: (note) => openNote(note),
+    });
+    return stop;
+  }, []);
 
   useEffect(() => {
-    void checkDue();
-  }, [notes, checkDue]);
+    void checkRemindersNow();
+  }, [notes]);
+
+  // Chưa cấp quyền thông báo (Android 13+): nhắc hẹn chỉ hiện khi app mở.
+  useEffect(() => {
+    if (!isTauri()) return;
+    let unlisten: (() => void) | undefined;
+    listen("notify-permission-needed", () => {
+      toast("Để nhận nhắc hẹn cả khi app đóng, hãy cho phép gửi thông báo");
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(() => undefined);
+    return () => unlisten?.();
+  }, []);
 
   // Mở note từ bảng nhắc: lấy bản mới nhất trong danh sách (nhắc hẹn đã bị
   // gỡ sau khi hiện bảng nên bản trong bảng nhắc là bản cũ).
-  const openDue = (note: Note) => {
-    setDue((prev) => prev.filter((d) => d.id !== note.id));
+  const openDue = (item: DueReminder) => {
+    setDue((prev) => prev.filter((d) => d.note.id !== item.note.id));
     exitSelectMode();
-    setView({ name: "editor", note: notes.find((n) => n.id === note.id) ?? note });
+    setView({ name: "editor", note: notes.find((n) => n.id === item.note.id) ?? item.note });
   };
 
   return (
     <>
-      {error ? <p className="error">{error}</p> : null}
+      <ToastHost />
       {view.name === "list" ? (
         <ListPage
           notes={notes}
@@ -249,12 +336,14 @@ export default function App() {
           }}
           onOpen={openNote}
           onTogglePin={(n) => void flipPin(n)}
-          onNew={() => void newNote()}
+          onOpenTrash={() => goNav("trash")}
           onAssignTags={(ns, t) => void assignTags(ns, t)}
-          onTrashNotes={(ns) => void trashNotes(ns)}
-          onOpenTrash={openTrash}
-          onOpenTags={openTags}
-          onOpenBackup={openBackup}
+          onTrashNotes={(ns) => trashWithEffect(ns)}
+          onReorder={(id, ids) => void reorder(id, ids)}
+          onTagsChanged={() => void reload(query)}
+          onVisibleChange={handleVisibleChange}
+          onToggleSelectMany={toggleSelectMany}
+          deletingIds={deletingIds}
           selectMode={selectMode}
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
@@ -263,11 +352,6 @@ export default function App() {
         />
       ) : view.name === "trash" ? (
         <TrashPage
-          onClose={() => setView({ name: "list" })}
-          onChanged={() => void reload(query)}
-        />
-      ) : view.name === "tags" ? (
-        <TagsPage
           onClose={() => setView({ name: "list" })}
           onChanged={() => void reload(query)}
         />
@@ -285,18 +369,22 @@ export default function App() {
           onTrash={(n) => void trashNotes([n])}
         />
       )}
+      {view.name === "list" || view.name === "backup" ? (
+        <BottomNav
+          view={view.name}
+          onSelect={goNav}
+          onNew={() => void newNote()}
+          selectMode={selectMode}
+          allSelected={allSelected}
+          onToggleSelectAll={toggleSelectAll}
+          onCancelSelect={exitSelectMode}
+          onTrashSelected={() =>
+            trashWithEffect(notes.filter((n) => selectedIds.has(n.id)))
+          }
+        />
+      ) : null}
       {due.length > 0 ? (
-        <div className="due-overlay">
-          <div className="due-card">
-            <h2>Đến giờ nhắc hẹn</h2>
-            {due.map((n) => (
-              <button key={n.id} className="due-item" onClick={() => openDue(n)}>
-                {n.title.trim() || "Ghi chú mới"}
-              </button>
-            ))}
-            <button onClick={() => setDue([])}>Đóng</button>
-          </div>
-        </div>
+        <ReminderDialog items={due} onOpen={openDue} onClose={() => setDue([])} />
       ) : null}
     </>
   );

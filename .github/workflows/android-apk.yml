@@ -71,6 +71,25 @@ jobs:
             npx tauri android init
           fi
 
+      # Icon Android: `tauri android init` chỉ copy icon MẶC ĐỊNH của template
+      # vào gen/android/.../mipmap-* (đã kiểm chứng từ mã nguồn tauri-cli
+      # 2.12.4: init/build không hề đọc src-tauri/icons/icon.png để thay
+      # thế chúng) nên mọi APK build ra đều mang icon xoáy Tauri dù icon.png
+      # đã đổi từ v10. Bước này ghi đè 15 file mipmap (5 mật độ x
+      # ic_launcher / ic_launcher_round / ic_launcher_foreground) bằng icon
+      # app thật, trước khi Gradle build.
+      - name: Thay icon Android bằng icon app
+        run: |
+          python3 -m pip install -q pillow
+          python3 scripts/fix-android-icons.py
+
+      # Nhắc hẹn native v18 (AlarmManager): chép âm chuông + icon notepad
+      # trắng + receiver vào dự án Android vừa init (sau bước thay icon,
+      # trước khi ký/build). Chạy 2 lần cho kết quả y nhau (đã kiểm trên cây
+      # giả lập). Pillow đã cài ở bước thay icon nên không cần cài lại.
+      - name: Cài nhắc hẹn native (AlarmManager)
+        run: python3 scripts/patch-android-notification.py
+
       # Ký bản release bằng keystore cố định (kha tạo 14/11/2026, giữ file
       # .keystore + mật khẩu cẩn thận — mất là không cập nhật đè app được nữa).
       # Keystore nằm trong GitHub Secrets, KHÔNG commit vào repo.

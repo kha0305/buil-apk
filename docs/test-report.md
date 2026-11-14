@@ -190,3 +190,139 @@ Kế hoạch test tay trên điện thoại: xem `tests/android-manual.md`.
   luôn cuối; tag đổi tên sẽ rơi xuống cuối (thứ tự lưu theo tên cũ).
 - `cargo test`: 33 passed (29 cũ + 4 mới: 2 nhắc hẹn + 2 sao lưu),
   `npm run build` đậu.
+
+## Icon Android không nhận icon mới (v15)
+- Nguyên nhân: `tauri android init` chỉ copy template, file mipmap trong
+  template là icon xoáy Tauri mặc định — đã kiểm chứng từ mã nguồn
+  tauri-cli 2.12.4: không bước nào của init/build đọc
+  `src-tauri/icons/icon.png` để thay chúng. Vì vậy mọi APK từ v10 tới v14
+  đều mang icon mặc định dù icon.png trên repo đã là icon mới (kiểm tra
+  hash khớp) — không phải do launcher cache.
+- Cách sửa: script `scripts/fix-android-icons.py` (ghi đè 15 file mipmap trong `gen/android/.../res` từ `icon.png`, theo đúng kích thước và cách cắt góc của `tauri icon`), chạy trong workflow ngay sau bước `tauri android init`, trước khi Gradle build.
+
+## Menu — thanh điều hướng dưới cùng (v16, mẫu 4)
+- Kha chọn mẫu 4 trong 4 mẫu menu (22:48 14/11): thanh cố định đáy màn
+  hình, 4 mục Ghi chú / Quản lý tag / Thùng rác / Sao lưu; mục đang mở in
+  đậm + gạch đỏ. Mẫu dropdown ☰ đã code trước đó bị bỏ (không giao).
+- Thanh hiện ở các màn chính (danh sách, tag, thùng rác, sao lưu), không
+  hiện ở màn sửa note. Vùng thùng rác khi kéo note dời lên trên thanh
+  dưới; nội dung cuối trang chừa 76px để không bị thanh che.
+- `npm run build` đậu. Chưa kiểm trên máy thật: cảm giác bấm tab, độ cao
+  thanh trên máy kha (safe-area), vùng thùng rác khi kéo có vừa tầm tay
+  không.
+- Icon cho thanh dưới: lúc đầu chỉ có chữ (tỉ vẽ sẵn bằng tay), kha hỏi
+  "sao ko làm dạng icon" (22:49) nên đổi sang icon SVG + chữ nhỏ: ghi
+  chú = tờ giấy, tag = thẻ tag, thùng rác = thùng rác, sao lưu = mây
+  tải lên; mục đang mở vẫn đỏ + gạch đỏ.
+- Icon nổi: kha chọn "4 icon nổi khỏi thanh" (22:51) — mỗi icon nằm trong
+  vòng tròn kem 44px nhô lên trên mép thanh, có bóng đổ; mục đang mở thì
+  vòng tròn đỏ, icon trắng. Nội dung cuối trang và vùng thùng rác dời lên
+  104px để không bị icon nổi che.
+
+## Menu kiểu M3E (v17)
+- Kha tự vẽ trên M3E Canvas (23:30 14/11) và chốt mẫu này: thanh dưới 5
+  mục, nút + là nút tròn đỏ lớn nổi giữa thanh, mục đang mở có viên thuốc
+  nền nhạt sau icon (không còn vòng tròn nổi từng icon như v16). Nút +
+  dời từ đầu danh sách xuống giữa thanh. Màu vẫn theo theme của app (kem
+  + đỏ), không đổi sang theme nâu Amber mặc định của M3E Canvas.
+- `npm run build` đậu. Chưa kiểm trên máy thật: nút + có vừa tay không,
+  viên thuốc có rõ không, nhãn "Tag" có rõ là Quản lý tag không.
+
+## Thêm 5 màu, mặc định trắng (23:50 14/11)
+- Kha hỏi còn màu nào không, tỉ đưa 5 màu pastel ứng cử viên, kha chốt
+  "thêm đi, mặc định cho trắng": COLOURS thêm peach (#fbd3ae), lavender
+  (#e6dcf7), sky (#bfe0f2), sage (#c4d6a4), white (#fffdf7) — tổng 15 màu.
+  Chấm trắng có viền #e6dcc8 để nhìn thấy trên nền kem. Note mới tạo
+  mặc định màu trắng (App.tsx newNote, trước là vàng).
+- `npm run build` đậu. Chưa kiểm trên máy thật: 15 chấm màu có vừa 2 hàng
+  không, ô trắng có phân biệt được với nền trang không.
+
+## Giao diện mới v18 (15/11/2026)
+
+### Đã chạy và đậu
+- `npm run build` (tsc + vite): đậu, 37 modules, JS ~285 kB.
+- `cargo test`: **53 passed / 0 failed, 0 warning** (33 cũ + 7 notify
+  mới + 12 backend v18 mới + 1 test sao lưu mới). Lệnh Rust `rename_tag`
+  giờ 4 tham số, `reorder_notes` có 3 test riêng (bền sau mở lại DB,
+  không đụng nhóm khác, idempotent), `rename_tag` có test trùng tên
+  ("Tên tag này đã có rồi.") và chuẩn hóa hex → tên id.
+- `mergeReorder` + `clampToTier` (xếp note trong nhóm): 10 case logic
+  chạy bằng Node đều đậu (kéo lên/xuống, thả đúng chỗ = không đổi, đang
+  tìm kiếm thì note ẩn giữ đúng vị trí, kẹp tầng ghim 2 chiều).
+- Script patch thông báo (`scripts/patch-android-notification.py`) đã
+  kiểm trên cây Android giả lập: chạy 3 lần cho kết quả y nhau, âm chép
+  đúng md5, 5 icon `ic_notepad` đúng cỡ, thiếu file nguồn thì báo lỗi rõ.
+- Workflow GitHub Actions: YAML parse đậu; bước thông báo mới nằm ngay
+  sau bước thay icon, trước bước ký.
+
+### Đã làm (tóm tắt)
+- Backend: migration v6 (tag thêm `icon`/`colour`, bảng `note_order`
+  giữ thứ tự note riêng từng nhóm; tag id 0 là dòng sentinel cho nhóm
+  "Chưa gắn tag"). `rename_tag` báo lỗi khi trùng tên (bỏ gộp im lặng
+  v14), `delete_tag` đã xóa, `list_tags` chỉ trả tag còn note kèm
+  `noteIds` theo thứ tự hiển thị, `reorder_notes` ghi thứ tự theo nhóm.
+  Màu tag chuẩn hóa về tên id khi ghi (hex cũng chấp nhận).
+- Trang chính: chip lọc (Tất cả/tag/Chưa gắn tag), tagbox nhuộm nhạt
+  theo màu tag, đầu nhóm 1 hàng (pill tên + "N note", không chevron),
+  chấm màu khi thu gọn (xếp theo bảng màu), đổi tên tag inline (nhấn giữ
+  pill hoặc bút ✎, lưu tên+icon+màu 1 lần), kéo xếp note trong nhóm
+  (helper "slots" giữ chỗ note ẩn), menu chọn (Chọn tất cả theo note
+  đang hiện, chọn theo nhóm qua nút "N note", xóa cả đám không xác nhận),
+  thanh dưới 3 mục + FAB nằm gọn trong thanh, hiệu ứng xóa mờ+co 350ms,
+  màn chờ loading thật (nền kem + icon sổ vàng + vòng xoay).
+- Editor: 1 giao diện chung cho tạo/sửa, 2 thẻ riêng (tiêu đề trắng +
+  nội dung mang màu note), menu 5 mục + 3 sheet (Màu/Tag/Nhắc hẹn với
+  4 chip nhanh), nút Tạo/Lưu, Bỏ (nháp trống về im lặng, có nội dung thì
+  hỏi) vs Thùng rác (sửa note).
+- Thùng rác: xem danh sách/lưới, menu riêng (Chọn/Dọn sạch → Khôi phục
+  nhanh/Hủy/Xóa hẳn), toast "Chạm thẻ để chọn." khi vào chế độ chọn,
+  ra im lặng, xác nhận bằng dialog nổi. Sao lưu: bản mẫu JSON sẵn trong
+  ô nhập, kiểm tra JSON, dialog xác nhận ghi rõ số note. Nhập sao lưu
+  giờ giữ lại icon/màu tag + thứ tự note (bản v14 làm mất cả hai).
+- Thông báo nhắc hẹn: native AlarmManager qua JNI (plugin chính thức
+  không đáp ứng vì action của nó cần JS đang chạy). Khi app đóng vẫn
+  nổ: 1 icon sổ trắng duy nhất, tiêu đề = tiêu đề note, thu gọn 1 dòng
+  + "…", mở rộng tối đa 10 dòng, âm chuông vừa nhẹ, 3 nút (Mở ghi chú /
+  Nhắc lại 15 phút / Đã xong). Khi app mở thì bảng nhắc trong app
+  (poller 60 giây). Thông báo + âm + icon + nút đều có case test tay
+  (case 30–36).
+- Màn hình chờ: `#loading` inline trong index.html (nền kem + icon sổ
+  vàng SVG + vòng xoay đỏ), `backgroundColor "#f7f1e5"` trong
+  tauri.conf.json, React gỡ sau lần render đầu.
+- Test tay: `tests/android-manual.md` giờ có 66 case, đánh số lại duy
+  nhất (trước đó 4 nhóm append trùng 30–33/30–41/30–36). Case 23/25
+  đánh dấu bỏ ở v18, case 28 viết lại theo nav mới.
+- Animation: chỉ opacity + transform, 200–350ms, không animate
+  width/height/top/left; thu gọn/mở nhóm chỉ fade nội dung; xóa nhiều
+  note cùng lúc thì bỏ bóng đổ cho nhẹ.
+
+### Quyết khác spec (đã ghi, cần kha chốt nếu muốn đổi)
+- `.tile` giữ `touch-action: pan-y` thay vì `none` (spec) — với `none`,
+  gần hết trang là thẻ note nên không cuộn được từ thẻ; kéo thả vẫn
+  chạy vì JS chặn cuộn sau khi nhấc note lên (nhấn giữ 400ms).
+- "Chọn tất cả" tính theo chip lọc + tìm kiếm, không tính nhóm thu gọn
+  (đọc đúng parenthetical trong spec: "note đang hiện (đã lọc chip +
+  tìm kiếm)"). Nếu muốn nhóm thu gọn cũng bị loại thì đổi 1 dòng ở App.
+- Màu tag từng lưu 2 dạng (editor lưu hex, home lưu tên id) — backend
+  giờ chuẩn hóa về tên id khi ghi; hiển thị chịu cả hai dạng.
+- `collapsed_groups` giờ lưu id tag (số) thay cho tên — giá trị cũ bị
+  bỏ qua 1 lần, các nhóm mở lại hết sau nâng cấp; tag đổi tên sẽ rơi
+  cuối danh sách nhóm (thứ tự lưu theo tên cũ, như hành vi v14).
+- Báo thức nhắc hẹn mất khi reboot máy (chưa làm `BOOT_COMPLETED`) —
+  giới hạn đã biết, không chặn v18.
+
+### Chưa kiểm được — cần máy thật của kha (case 30–66)
+- **Icon app:** App-info phải hiện icon sổ vàng + bút đỏ (bản sửa v15,
+  vẫn chưa kiểm chứng trên máy thật lần nào). Pipeline icon không đổi
+  trong v18 (workflow vẫn chạy `fix-android-icons.py` ngay sau init).
+- Thông báo native khi app đóng (âm, tiêu đề + đoạn nội dung, 1 icon,
+  thu gọn/mở rộng, 3 nút, nhắc lại 15 phút, bấm mở đúng note, từ chối
+  quyền) — case 30–36. Âm chuông theo kênh nên test âm phải làm trên
+  máy chưa từng cài app (hoặc gỡ cài lại). Receiver tìm `notes.db` ở
+  `filesDir/notes.db` (dự phòng `getDatabasePath`); nếu case 34/35 fail
+  thì xem logcat tag `ReminderReceiver`.
+- Cảm giác kéo-thả xếp thứ tự, hiệu ứng xóa, các flow chọn nhiều, sheet
+  trượt lên, màn chờ loading có hiện đúng không, toast/dialog trên máy —
+  case 37–66.
+- Build APK trên GitHub Actions là lần kiểm đầu tiên của khối JNI
+  (chỉ biên dịch cho target Android, VM không kiểm được).

@@ -75,6 +75,40 @@ pub fn exec_one(conn: &Connection, sql: &str, p: &[&dyn rusqlite::types::ToSql])
     Ok(())
 }
 
+/// Dòng tag cha phải tồn tại trước khi ghi note_order.
+/// Nhóm 0 là dòng sentinel, tạo lại nếu bản sao lưu đã xóa nó
+/// (import xóa hết bảng tags nhưng chỉ mở lại DB mới chạy migrate).
+pub fn ensure_order_parent(conn: &Connection, tag_id: i64) -> Result<(), String> {
+    if tag_id == 0 {
+        ensure_untagged_tag(conn).map_err(db_err)?;
+    }
+    Ok(())
+}
+
+/// Thêm dòng thứ tự cho note vào nhóm nếu chưa có (giữ vị trí cũ nếu đã có).
+/// Vị trí mới = cuối nhóm (nhóm trống thì 0).
+pub fn ensure_order_row(conn: &Connection, tag_id: i64, note_id: i64) -> Result<(), String> {
+    ensure_order_parent(conn, tag_id)?;
+    conn.execute(
+        "INSERT OR IGNORE INTO note_order (tag_id, note_id, position)
+         SELECT ?1, ?2, COALESCE(MAX(position), -1) + 1 FROM note_order WHERE tag_id = ?1",
+        params![tag_id, note_id],
+    )
+    .map_err(db_err)?;
+    Ok(())
+}
+
+/// Dòng tag id 0 cho nhóm "Chưa gắn tag": khóa ngoại của note_order (tag_id 0)
+/// bắt buộc phải có dòng cha trong bảng tags, nên nhóm này là một dòng thật.
+fn ensure_untagged_tag(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT OR IGNORE INTO tags (id, name, icon, colour)
+         VALUES (0, 'Chưa gắn tag', 'none', 'cream')",
+        [],
+    )?;
+    Ok(())
+}
+
 pub fn now_millis() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -151,6 +185,43 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
              PRAGMA user_version = 5;",
         )?;
     }
+    // Migration v6: icon + màu cho tag; thứ tự note trong từng nhóm (bảng note_order).
+    // tag_id 0 = nhóm "Chưa gắn tag". Backfill xếp theo updated_at tăng dần (cũ trước).
+    if conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))? < 6 {
+        conn.execute_batch(
+            "ALTER TABLE tags ADD COLUMN icon TEXT NOT NULL DEFAULT 'tag';
+             ALTER TABLE tags ADD COLUMN colour TEXT NOT NULL DEFAULT 'cream';
+             CREATE TABLE IF NOT EXISTS note_order (
+                tag_id   INTEGER NOT NULL DEFAULT 0,
+                note_id  INTEGER NOT NULL,
+                position INTEGER NOT NULL,
+                UNIQUE (tag_id, note_id),
+                FOREIGN KEY (tag_id) REFERENCES tags (id) ON DELETE CASCADE,
+                FOREIGN KEY (note_id) REFERENCES notes (id) ON DELETE CASCADE
+             );
+             CREATE INDEX IF NOT EXISTS idx_note_order_group ON note_order (tag_id, position);",
+        )?;
+        // Tag người dùng lỡ đặt tên "Chưa gắn tag" thì đổi tên, để dòng sentinel
+        // id 0 chèn được (không thì backfill nhóm 0 lỗi khóa ngoại, app không mở được).
+        conn.execute(
+            "UPDATE tags SET name = 'Chưa gắn tag #' || id
+             WHERE id != 0 AND name = 'Chưa gắn tag' COLLATE NOCASE",
+            [],
+        )?;
+        ensure_untagged_tag(conn)?;
+        conn.execute_batch(
+            "INSERT OR IGNORE INTO note_order (tag_id, note_id, position)
+             SELECT COALESCE(nt.tag_id, 0), n.id,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY COALESCE(nt.tag_id, 0)
+                        ORDER BY n.updated_at ASC, n.id ASC
+                    ) - 1
+             FROM notes n LEFT JOIN note_tags nt ON nt.note_id = n.id;
+             PRAGMA user_version = 6;",
+        )?;
+    }
+    // Tạo lại dòng sentinel id 0 nếu bản sao lưu đã xóa nó (import xóa hết bảng tags).
+    ensure_untagged_tag(conn)?;
     Ok(())
 }
 

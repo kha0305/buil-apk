@@ -4,11 +4,16 @@
 mod backup;
 mod db;
 mod notes;
+mod notify;
 mod settings;
 mod tags;
 
 use db::{open_db, DbState};
 use notes::{NewNote, Note};
+use notify::{
+    cancel_reminder_notification, schedule_reminder_notification, snooze_reminder_notification,
+    take_pending_open_note,
+};
 use tauri::{Manager, State};
 
 #[tauri::command]
@@ -52,13 +57,13 @@ fn set_note_tags(state: State<DbState>, id: i64, tags: Vec<String>) -> Result<No
 }
 
 #[tauri::command]
-fn rename_tag(state: State<DbState>, id: i64, name: String) -> Result<tags::Tag, String> {
-    tags::rename_tag(&state, id, &name)
+fn rename_tag(state: State<DbState>, id: i64, name: String, icon: String, colour: String) -> Result<tags::Tag, String> {
+    tags::rename_tag(&state, id, &name, &icon, &colour)
 }
 
 #[tauri::command]
-fn delete_tag(state: State<DbState>, id: i64) -> Result<(), String> {
-    tags::delete_tag(&state, id)
+fn reorder_notes(state: State<DbState>, tag_id: i64, ordered_ids: Vec<i64>) -> Result<(), String> {
+    tags::reorder_notes(&state, tag_id, ordered_ids)
 }
 
 #[tauri::command]
@@ -130,7 +135,7 @@ pub fn run() {
             list_tags,
             set_note_tags,
             rename_tag,
-            delete_tag,
+            reorder_notes,
             get_setting,
             set_setting,
             trash_note,
@@ -139,6 +144,10 @@ pub fn run() {
             list_trash,
             empty_trash,
             set_reminder,
+            schedule_reminder_notification,
+            cancel_reminder_notification,
+            snooze_reminder_notification,
+            take_pending_open_note,
             export_backup,
             import_backup
         ])

@@ -16,6 +16,7 @@ html,
 body,
 #root {
   height: 100%;
+  background: var(--bg);
 }
 
 body {
@@ -33,7 +34,8 @@ body {
   padding:
     calc(env(safe-area-inset-top, 0px) + 12px)
     calc(env(safe-area-inset-right, 0px) + 16px)
-    calc(env(safe-area-inset-bottom, 0px) + 16px)
+    /* Chừa chỗ cho thanh điều hướng dưới cùng (nút + nằm gọn trong thanh). */
+    calc(env(safe-area-inset-bottom, 0px) + 104px)
     calc(env(safe-area-inset-left, 0px) + 16px);
 }
 
@@ -64,56 +66,436 @@ button.danger {
   color: var(--accent);
 }
 
-.add-btn {
-  font-size: 22px;
-  line-height: 1;
-  padding: 6px 14px;
+/* Nút icon tròn, trơn, không khung (đầu trang danh sách, bút sửa tag). */
+.icon-btn {
+  border: none;
+  background: transparent;
+  color: var(--text);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
-.search,
-.title-input,
-.content-input {
+.icon-btn.small {
+  width: 30px;
+  height: 30px;
+}
+
+/* Thanh điều hướng dưới cùng v18: nền đặc #fffdf7, bóng mờ phía trên,
+   nút + 56px nằm gọn trong thanh (không nhô lên trên mép). */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  background: var(--card);
+  box-shadow: 0 -4px 16px rgb(0 0 0 / 0.04);
+  padding: 8px 4px calc(env(safe-area-inset-bottom, 0px) + 8px);
+}
+
+.bottom-nav button {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  padding: 6px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.bottom-nav button svg {
+  width: 26px;
+  height: 26px;
+}
+
+/* Viên thuốc đỏ nhạt sau icon của mục đang mở (60x36). */
+.bottom-nav button .nav-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  height: 36px;
+  border-radius: 18px;
+}
+
+.bottom-nav button.active .nav-indicator {
+  background: #fbe3e0;
+}
+
+.bottom-nav button.nav-fab {
+  flex: none;
+  align-self: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fffdf7;
+  font-size: 28px;
+  line-height: 1;
+  box-shadow: 0 6px 16px rgb(179 38 30 / 0.4);
+}
+
+.bottom-nav button.active {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Menu chế độ chọn: hai mục chữ hai bên, nút ✕ tròn kem ở giữa. */
+.bottom-nav.select-nav {
+  align-items: center;
+}
+
+.bottom-nav button.select-action {
+  flex: 1;
+  flex-direction: row;
+  justify-content: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  padding: 12px 2px;
+}
+
+.bottom-nav button.select-action svg {
+  width: 18px;
+  height: 18px;
+}
+
+.bottom-nav button.nav-cancel {
+  flex: none;
+  width: 56px;
+  height: 56px;
+  margin: 0 auto;
+  border-radius: 50%;
+  background: #f6ecd2;
+  border: 1px solid #eadbb8;
+  color: var(--text);
+  font-size: 22px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Ô tìm kiếm: viên thuốc. */
+.search {
   font: inherit;
   color: var(--text);
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 999px;
+  padding: 10px 16px;
   outline: none;
-}
-
-.search {
   margin: 12px 0;
 }
+
+/* Hàng chip lọc dưới ô tìm kiếm: chip trung tính, không mang màu tag. */
+.filter-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  margin-bottom: 12px;
+  scrollbar-width: none;
+}
+
+.filter-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.filter-chip.selected {
+  background: #fbe3e0;
+  border-color: #fbe3e0;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Khung nhóm tag: nền kem nhạt mặc định; tag có màu thì nhuộm nhạt theo
+   màu tag bằng style inline (blendHex). */
+.tag-group {
+  margin-bottom: 12px;
+}
+
+.tagbox {
+  background: #f6ecd2;
+  border: 1px solid #eadbb8;
+  border-radius: 24px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.05);
+  padding: 12px;
+}
+
+.tag-group.drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Đầu nhóm: 1 hàng — viên thuốc tên tag (trái) + số note (phải). */
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #e8d3ae;
+  border: none;
+  border-radius: 999px;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+  min-height: 24px;
+  color: var(--text);
+  /* Nhấn giữ tên tag để đổi tên: tay cuộn dọc bình thường, JS hủy hẹn
+     giờ khi trượt đi; nhấn giữ đủ lâu thì mở form đổi tên. */
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.group-count {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* Nút "N note" ở chế độ chọn: viền nhạt, nền trắng; cả nhóm đã chọn thì
+   nền đỏ chữ trắng. */
+.group-count.count-btn {
+  border: 1px solid #d8cfba;
+  background: var(--card);
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-left: auto;
+  cursor: pointer;
+}
+
+.group-count.count-btn.all {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fffdf7;
+}
+
+/* Chấm màu khi nhóm thu gọn: một chấm cho mỗi màu note trong nhóm,
+   xếp theo thứ tự bảng màu. */
+.colour-dots {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.colour-dots .dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid rgb(0 0 0 / 0.15);
+}
+
+.group-empty {
+  color: var(--muted);
+  font-size: 13px;
+  padding: 8px 4px 0;
+  margin: 0;
+}
+
+/* Form đổi tên tag ngay dưới đầu nhóm: ô tên + ✓/✕, hàng icon, hàng màu. */
+.rename-editor {
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rename-row {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.rename-input {
+  font: inherit;
+  color: var(--text);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 8px 14px;
+  outline: none;
+  flex: 1;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.icon-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.icon-pick {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--card);
+  color: var(--text);
+  padding: 0;
+}
+
+.icon-pick.selected {
+  border-color: var(--accent);
+  background: #fbe3e0;
+}
+
+.icon-none {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.swatch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+/* Chấm màu (dùng cho hàng màu của form đổi tên tag). */
+.colour-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  padding: 0;
+  border: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+}
+
+/* Màu đang chọn: vòng đỏ + dấu ✓ đậm (chấm trắng có viền để nhìn thấy). */
+.swatch-row .colour-dot.selected {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px #fbe3e0;
+}
+
+/* Bảng màu note cuối (v18): 15 màu pastel nhạt theo thứ tự cầu vồng,
+   cộng kem (màu tag mặc định). Dùng cho thẻ note, ô màu tag, chấm màu. */
+.colour-red { background: #f9c8c8; }
+.colour-orange { background: #fbdcb8; }
+.colour-peach { background: #fbd3ae; }
+.colour-yellow { background: #fdf0b8; }
+.colour-green { background: #cbf0c8; }
+.colour-sage { background: #dce6c8; }
+.colour-mint { background: #cbf0e6; }
+.colour-sky { background: #bfe0f2; }
+.colour-blue { background: #c9dcf8; }
+.colour-purple { background: #e0cdf8; }
+.colour-lavender { background: #e6dcf7; }
+.colour-pink { background: #fbdfea; }
+.colour-brown { background: #e8dac8; }
+.colour-grey { background: #e6e6e6; }
+.colour-white { background: #fffdf7; border-color: #e6dcc8; }
+.colour-cream { background: #e8d3ae; }
 
 .note-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
+  margin-top: 10px;
+  /* Mở nhóm: chỉ fade nội dung (opacity), không animate chiều cao. */
+  animation: group-fade-in 250ms ease-out;
+}
+
+@keyframes group-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Xem dạng danh sách: 1 cột, thẻ cao theo nội dung. */
+.note-list.list-view {
+  grid-template-columns: 1fr;
 }
 
 .note-card {
   position: relative;
   background: var(--card);
   border: 1px solid var(--border);
-  border-left: 6px solid #e3c15a;
-  border-radius: 12px;
+  border-radius: 22px;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.06);
   padding: 12px 14px;
   cursor: pointer;
-  /* Ô vuông: cao bằng rộng, chữ dài tự cắt, tag dồn xuống đáy. */
+  /* Ô vuông: cao bằng rộng, chữ dài tự cắt. */
   aspect-ratio: 1 / 1;
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  /* Tay cuộn dọc bình thường; khi đã nhấc note lên thì JS chặn cuộn. */
+  /* Tay cuộn dọc bình thường (kéo thả v18 vẫn chạy nhờ chặn cuộn bằng JS
+     sau khi nhấc note lên; để touch-action: none thì không cuộn được nữa
+     vì gần hết trang là thẻ note). */
   touch-action: pan-y;
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+  transition: opacity 0.35s ease, transform 0.35s ease;
 }
 
-.note-card.dragging {
-  opacity: 0.4;
+.note-list.list-view .note-card {
+  aspect-ratio: auto;
+}
+
+/* Ô đang bị kéo thành khe thả: giữ chỗ, viền đứt nét đỏ. */
+.note-card.drop-slot {
+  background: rgb(179 38 30 / 0.06);
+  border: 2px dashed var(--accent);
+  box-shadow: none;
+  cursor: default;
+}
+
+/* Cho vào thùng rác: mờ dần + co lại rồi mới biến khỏi danh sách.
+   Chỉ opacity + scale (GPU); nhiều note xóa cùng lúc vẫn nhẹ: bỏ luôn
+   bóng đổ trong lúc xóa để lớp composite nhẹ hơn. */
+.note-card.deleting {
+  opacity: 0;
+  transform: scale(0.85);
+  box-shadow: none;
 }
 
 .note-card h2 {
@@ -137,230 +519,96 @@ button.danger {
   overflow: hidden;
 }
 
-.note-card .tag-chips {
-  margin-top: auto;
-  padding-top: 8px;
+.note-list.list-view .note-card p {
+  -webkit-line-clamp: 2;
 }
 
-.pin-btn {
+/* Chip "Ghim" ở góc trên-phải thẻ (chỉ note đang ghim). */
+.pin-chip {
   align-self: flex-end;
   flex-shrink: 0;
   font-size: 12px;
-  padding: 4px 8px;
+  font-weight: 700;
+  padding: 4px 10px;
   margin-bottom: 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--card);
+  color: var(--text);
 }
 
-.empty {
+/* Ô tick khi chọn nhiều note: tròn, viền nhạt; đã chọn thì nền đỏ, ✓ trắng. */
+.tick {
+  align-self: flex-end;
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 6px;
+  border-radius: 50%;
+  border: 2px solid #d8cfba;
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+  color: #fffdf7;
+}
+
+.tick.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* Trạng thái trống: cùng kiểu mềm với trang (tiêu đề đậm + dòng phụ xám). */
+.empty-state {
   color: var(--muted);
   text-align: center;
   margin-top: 48px;
+  padding: 0 24px;
 }
 
-.error {
-  color: var(--accent);
-  white-space: pre-wrap;
+.empty-state p {
+  margin: 4px 0;
 }
 
-.colours {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin: 12px 0;
-}
-
-.colour-dot {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  padding: 0;
-  border: 2px solid transparent;
-}
-
-.colour-dot.selected {
-  border-color: var(--text);
-}
-
-.colour-yellow { background: #f6e58d; }
-.colour-green { background: #a8e6a3; }
-.colour-blue { background: #a9c6f5; }
-.colour-pink { background: #f5b8c8; }
-.colour-purple { background: #d3b8f5; }
-.colour-orange { background: #f9c489; }
-.colour-red { background: #f5a3a3; }
-.colour-mint { background: #a8e6d5; }
-.colour-brown { background: #d9c1a3; }
-.colour-grey { background: #d5d5d5; }
-
-.note-card.colour-green { border-left-color: #5da85a; }
-.note-card.colour-blue { border-left-color: #4a7dd4; }
-.note-card.colour-pink { border-left-color: #d4628a; }
-.note-card.colour-purple { border-left-color: #8a5fd4; }
-.note-card.colour-orange { border-left-color: #d4862e; }
-.note-card.colour-red { border-left-color: #cf5a5a; }
-.note-card.colour-mint { border-left-color: #4ea88f; }
-.note-card.colour-brown { border-left-color: #a0855f; }
-.note-card.colour-grey { border-left-color: #8a8a8a; }
-
-.title-input {
-  font-size: 18px;
-  font-weight: 700;
-  margin-bottom: 10px;
-}
-
-.content-input {
-  flex: 1;
-  resize: none;
-  line-height: 1.6;
-  min-height: 200px;
-}
-
-.autosave-hint {
-  color: var(--muted);
-  font-size: 12px;
-  margin: 8px 0 0;
-  text-align: right;
-}
-
-/* Tag: chip nhỏ trên thẻ note, ô nhập tag trong editor, nhóm theo tag. */
-.tag-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 8px;
-}
-
-.tag-chip {
-  background: #efe6cf;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 3px 8px;
-  font-size: 12px;
-}
-
-.tag-chip button {
-  border: none;
-  background: none;
-  padding: 0 0 0 4px;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.tag-editor {
-  margin-bottom: 10px;
-}
-
-.tag-input-row {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-  align-items: stretch;
-}
-
-.tag-input {
-  font: inherit;
+.empty-state strong {
   color: var(--text);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 12px;
-  outline: none;
-  flex: 1;
-  min-width: 0;
+  font-size: 17px;
 }
 
-.tag-add {
-  font: inherit;
-  color: var(--text);
-  background: #efe6cf;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 14px;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-
-.tag-error {
-  margin: 6px 0 0;
-  font-size: 12px;
-}
-
-.drag-hint {
-  color: var(--muted);
-  font-size: 12px;
-  margin: 0 0 12px;
-}
-
-.tag-group {
-  border: 1px dashed transparent;
-  border-radius: 12px;
-  padding: 4px;
-  margin-bottom: 12px;
-}
-
-.tag-group.drop-target {
-  border-color: var(--text);
-  background: #f3ead2;
-}
-
-.group-header {
-  display: flex;
-  justify-content: space-between;
-  width: 100%;
-  background: none;
-  border: none;
-  font-weight: 700;
-  padding: 6px 4px;
-  text-align: left;
-  /* Nhấn giữ tiêu đề để kéo nhóm: tay cuộn dọc bình thường, JS chặn
-     cuộn khi đã nhấc nhóm lên, giống hệt thẻ note. */
-  touch-action: pan-y;
-  -webkit-user-select: none;
-  user-select: none;
-}
-
-/* Nhóm đang bị kéo theo tiêu đề. */
-.tag-group.group-dragging {
-  opacity: 0.5;
-}
-
-/* Vạch chèn giữa các nhóm khi đang kéo tiêu đề nhóm. */
-.insert-line {
-  height: 0;
-  border-top: 3px solid var(--text);
-  border-radius: 3px;
-  margin: 2px 0;
-}
-
-.group-empty {
-  color: var(--muted);
-  font-size: 13px;
-  padding: 4px 8px;
-  margin: 0;
-}
-
-/* Bản sao bay theo ngón tay/chuột khi đang kéo; không chặn elementFromPoint. */
-.drag-clone {
+/* Vị trí bản sao kéo: chỉ transform (GPU), ghi thẳng qua ref khi tay di
+   chuyển, không qua React state (không render lại danh sách khi kéo). */
+.drag-clone-pos {
   position: fixed;
+  left: 0;
+  top: 0;
   z-index: 50;
   pointer-events: none;
+  will-change: transform;
+}
+
+/* Bản sao bay theo tay khi đang kéo: xoay nhẹ + bóng đậm. */
+.drag-clone {
   background: var(--card);
-  border: 1px solid var(--text);
-  border-radius: 10px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
   padding: 8px 12px;
   font-size: 14px;
   max-width: 240px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.2);
+  transform: rotate(2deg) scale(1.04);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
 }
 
-/* Thùng rác: chỉ hiện khi đang kéo, cố định ở đáy màn hình. */
+/* Thùng rác: chỉ hiện khi đang kéo, cố định phía trên thanh điều hướng. */
 .trash-zone {
   position: fixed;
   left: 16px;
   right: 16px;
-  bottom: calc(env(safe-area-inset-bottom, 0px) + 12px);
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 104px);
   z-index: 60;
   background: #fbe3e0;
   border: 2px dashed var(--accent);
@@ -377,141 +625,135 @@ button.danger {
   border-style: solid;
 }
 
-/* Trang thùng rác: danh sách hàng đơn giản, không dùng thẻ ô vuông. */
+/* Toast: pill tối nổi ở đầu trang, đỏ khi lỗi. Vào bằng fade + trượt nhẹ
+   (~250ms, chỉ opacity + transform); keyframes giữ translateX(-50%) để
+   toast không nhảy sau khi animation chạy xong. */
+.toast {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 12px);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  background: #2b2620;
+  color: #fffdf7;
+  border-radius: 999px;
+  padding: 10px 18px;
+  font-size: 14px;
+  max-width: calc(100vw - 32px);
+  text-align: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3);
+  animation: toast-in 250ms ease-out;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(-6px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0) scale(1);
+  }
+}
+
+.toast-error {
+  background: var(--accent);
+}
+
+/* Dialog xác nhận: nền mờ + card kem bo tròn. Vào bằng fade nền (200ms)
+   và pop card (250ms) — chỉ opacity + transform. */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: dialog-fade-in 200ms ease-out;
+}
+
+@keyframes dialog-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.dialog-card {
+  background: var(--card);
+  border-radius: 22px;
+  padding: 20px;
+  width: 100%;
+  max-width: 360px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+  animation: dialog-pop-in 250ms ease-out;
+}
+
+@keyframes dialog-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.dialog-card h3 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.dialog-body {
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.dialog-body strong {
+  color: var(--accent);
+}
+
+.dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.dialog-actions button {
+  border-radius: 999px;
+  padding: 9px 18px;
+  font-weight: 700;
+}
+
+.btn-outline {
+  background: var(--card);
+  border: 1px solid var(--border);
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fffdf7;
+}
+
+.btn-danger {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fffdf7;
+}
+
+/* Trang thùng rác: danh sách hàng đơn giản (phần còn lại dùng inline style). */
 .trash-list {
   display: flex;
   flex-direction: column;
   gap: 10px;
   margin-top: 12px;
-}
-
-.trash-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px 14px;
-}
-
-.trash-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.trash-text h2 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.trash-meta {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.trash-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.tag-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.tag-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 12px 14px;
-}
-
-.tag-text {
-  flex: 1;
-  min-width: 0;
-}
-
-.tag-text h2 {
-  margin: 0 0 4px;
-  font-size: 16px;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.tag-meta {
-  margin: 0;
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.tag-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.tag-rename-input {
-  flex: 1;
-  min-width: 0;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  font-size: 16px;
-  background: var(--card);
-  color: var(--text);
-}
-
-/* Ô tick khi chọn nhiều note. */
-.tick {
-  align-self: flex-end;
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  margin-bottom: 6px;
-  border-radius: 50%;
-  border: 2px solid var(--border);
-  background: var(--card);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  line-height: 1;
-}
-
-.tick.on {
-  background: #e3c15a;
-  border-color: var(--text);
-}
-
-/* Nhắc hẹn trong editor: ô ngày giờ + nút đặt/gỡ. */
-.reminder-row {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  align-items: stretch;
-  margin-bottom: 10px;
-}
-
-.reminder-input {
-  font: inherit;
-  color: var(--text);
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 8px 12px;
-  outline: none;
-  flex: 1;
-  min-width: 0;
 }
 
 /* Bảng nhắc hẹn tới giờ: phủ lên trên mọi màn hình. */
@@ -547,7 +789,129 @@ button.danger {
   text-align: left;
 }
 
-/* Trang sao lưu: hai mục xuất và nhập, ô JSON dùng chữ nhỏ. */
+/* Bảng nhắc hẹn v18: chuông đỏ, dòng note bấm được. */
+.reminder-card {
+  gap: 12px;
+  animation: reminder-pop-in 250ms ease-out;
+}
+
+/* Hiện/ẩn chỉ dùng transform + opacity, không đụng width/height/top/left. */
+@keyframes reminder-pop-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.reminder-closing {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 250ms ease-out,
+    transform 250ms ease-out;
+}
+
+.due-overlay {
+  animation: due-fade-in 250ms ease-out;
+}
+
+@keyframes due-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.due-closing {
+  opacity: 0;
+  transition: opacity 250ms ease-out;
+}
+
+.reminder-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.reminder-bell {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #fde8e8;
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.reminder-bell svg {
+  width: 22px;
+  height: 22px;
+}
+
+.reminder-sub {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.reminder-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.reminder-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.reminder-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  flex: 1;
+}
+
+.reminder-title {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reminder-time {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.reminder-chevron {
+  color: var(--muted);
+  font-size: 20px;
+  line-height: 1;
+}
+
+/* Trang sao lưu (phần còn lại dùng inline style). */
 .backup-section {
   margin-top: 12px;
   display: flex;
@@ -565,10 +929,6 @@ button.danger {
   color: var(--muted);
   font-size: 13px;
   margin: 0;
-}
-
-.backup-ok {
-  color: #5da85a;
 }
 
 .backup-json {
