@@ -71,13 +71,13 @@ jobs:
           fi
 
       - name: Build APK
-        run: npx tauri android build --apk
+        run: npx tauri android build --apk --debug
         env:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/26.0.10792818
 
       - name: Đổi tên APK universal
         run: |
-          cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk \
+          cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk ghi-chu-0.1.0-debug.apk
              ghi-chu-0.1.0-universal.apk
 
       - name: Upload APK
