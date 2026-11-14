@@ -183,7 +183,17 @@ mod android {
         let ctx = ndk_context::android_context();
         let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }.map_err(|e| e.to_string())?;
         let mut env = vm.attach_current_thread().map_err(|e| e.to_string())?;
-        f(&mut env)
+        let result = f(&mut env);
+        if result.is_err() {
+            // BẮT BUỘC: jni 0.21.1 trả Err khi Java ném exception nhưng KHÔNG
+            // clear nó (xem macros.rs: `check_exception!` chỉ `return Err`,
+            // không gọi `ExceptionClear`). Exception còn chờ mà native trả
+            // về cho Java thì ART giết process ngay ("Dọn sạch" tự thoát).
+            // Clear ở đây biến mọi lỗi JNI thành Err thường để JS nuốt êm.
+            // `exception_clear` khi không có exception chờ là no-op.
+            let _ = env.exception_clear();
+        }
+        result
     }
 
     /// Activity hiện tại (JObject không Copy nên mỗi lần gọi tạo lại từ con trỏ thô).

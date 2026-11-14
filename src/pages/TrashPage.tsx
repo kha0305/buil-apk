@@ -154,7 +154,7 @@ const tickStyle = (on: boolean): CSSProperties => ({
 
 const outlineBtn = (red: boolean): CSSProperties => ({
   background: "#fffdf7",
-  border: `1.5px solid ${red ? ACCENT : "#2b2620"}`,
+  border: `1.5px solid ${red ? ACCENT : "#e6dcc8"}`,
   color: red ? ACCENT : "#2b2620",
   borderRadius: 999,
   padding: "6px 12px",
@@ -168,7 +168,7 @@ const iconBtn = (red: boolean): CSSProperties => ({
   borderRadius: "50%",
   padding: 0,
   background: "#fffdf7",
-  border: `1.5px solid ${red ? ACCENT : "#2b2620"}`,
+  border: `1.5px solid ${red ? ACCENT : "#e6dcc8"}`,
   color: red ? ACCENT : "#2b2620",
   display: "flex",
   alignItems: "center",
@@ -287,6 +287,14 @@ export default function TrashPage({ onClose, onChanged }: Props) {
       return next;
     });
 
+  // Chọn tất cả / Bỏ chọn hết: áp dụng cho các ghi chú đang hiển thị
+  // trong Thùng rác (không có lọc/tìm kiếm nên là toàn bộ thùng rác).
+  const allSelected = trash.length > 0 && selected.size === trash.length;
+  const toggleSelectAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(trash.map((n) => n.id)));
+  };
+
   const handleBack = () => {
     if (selecting) exitSelecting();
     else onClose();
@@ -326,7 +334,8 @@ export default function TrashPage({ onClose, onChanged }: Props) {
     try {
       for (const note of notes) {
         await deleteNoteForever(note.id);
-        await cancelNativeReminder(note.id);
+        // Chỉ note có nhắc hẹn mới có báo thức native để gỡ.
+        if (note.remindAt != null) await cancelNativeReminder(note.id);
       }
       setTrash((prev) => prev.filter((n) => !ids.has(n.id)));
     } catch (e) {
@@ -342,7 +351,12 @@ export default function TrashPage({ onClose, onChanged }: Props) {
     await new Promise((r) => setTimeout(r, DELETE_ANIM_MS));
     try {
       await emptyTrash();
-      for (const note of trash) await cancelNativeReminder(note.id);
+      // Chỉ note có nhắc hẹn mới có báo thức native để gỡ — gọi cancel cho
+      // mọi note vừa tốn lệnh JNI vừa tăng nguy cơ một lần cancel lỗi phá
+      // cả thao tác dọn sạch (safeInvoke đã nuốt lỗi JS, không nuốt được
+      // exception Java còn chờ phía Rust).
+      for (const note of trash)
+        if (note.remindAt != null) await cancelNativeReminder(note.id);
       setTrash([]);
     } catch (e) {
       toast(errMsg(e), "error");
@@ -418,10 +432,33 @@ export default function TrashPage({ onClose, onChanged }: Props) {
           type="button"
           onClick={handleBack}
           aria-label={selecting ? "Thoát chế độ chọn" : "Quay lại danh sách"}
+          style={{
+            minWidth: 44,
+            minHeight: 44,
+            padding: "4px 12px",
+            fontSize: 24,
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
         >
           ‹
         </button>
         <h1>{selecting ? `Đã chọn ${selected.size}` : "Thùng rác"}</h1>
+        {selecting ? (
+          <button
+            type="button"
+            onClick={toggleSelectAll}
+            aria-label={
+              allSelected
+                ? "Bỏ chọn hết ghi chú trong thùng rác"
+                : "Chọn tất cả ghi chú trong thùng rác"
+            }
+            style={{ fontWeight: 600, whiteSpace: "nowrap" }}
+          >
+            {allSelected ? "Bỏ chọn hết" : "Chọn tất cả"}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={() => setView(view === "list" ? "grid" : "list")}
@@ -526,7 +563,7 @@ export default function TrashPage({ onClose, onChanged }: Props) {
                 borderRadius: "50%",
                 background: "#efe6cf",
                 border: "1px solid #e6dcc8",
-                color: "#2b2620",
+                color: ACCENT,
                 fontSize: 22,
                 lineHeight: 1,
                 padding: 0,
@@ -536,7 +573,7 @@ export default function TrashPage({ onClose, onChanged }: Props) {
                 justifyContent: "center",
               }}
               onClick={exitSelecting}
-              aria-label="Hủy chọn"
+              aria-label="Thoát chế độ chọn"
             >
               ✕
             </button>

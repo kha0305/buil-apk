@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { toast } from "../lib/toast";
 import ConfirmDialog from "../components/ConfirmDialog";
 import { exportBackup, importBackup, listNotes } from "../services/notesApi";
 
 type Props = {
-  onClose: () => void;
   onChanged: () => void;
 };
 
@@ -77,9 +76,24 @@ const outlineRedBtn: CSSProperties = {
   fontWeight: 700,
 };
 
-export default function BackupPage({ onClose, onChanged }: Props) {
+export default function BackupPage({ onChanged }: Props) {
   const [exported, setExported] = useState("");
   const [importText, setImportText] = useState(SAMPLE_TEXT);
+  const importRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Ô nhập tự giãn theo nội dung (mặc định đã hiện trọn bản mẫu ~40 dòng,
+  // không phải cuộn trong ô): đặt chiều cao theo scrollHeight.
+  const autoResizeImport = () => {
+    const el = importRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  // Gõ/dán/xóa trong ô nhập, hay mở màn Sao lưu, đều giãn lại cho vừa nội dung.
+  useEffect(() => {
+    autoResizeImport();
+  }, [importText]);
   const [confirmImport, setConfirmImport] = useState<{
     noteCount: number;
     currentCount: number;
@@ -147,9 +161,6 @@ export default function BackupPage({ onClose, onChanged }: Props) {
   return (
     <main className="page">
       <header className="toolbar">
-        <button type="button" onClick={onClose} aria-label="Quay lại danh sách">
-          ‹
-        </button>
         <h1>Sao lưu</h1>
       </header>
       <section className="backup-section">
@@ -176,8 +187,9 @@ export default function BackupPage({ onClose, onChanged }: Props) {
           Nhập sẽ thay thế toàn bộ ghi chú hiện tại, kể cả thùng rác.
         </p>
         <textarea
+          ref={importRef}
           className="backup-json"
-          style={{ minHeight: 160 }}
+          style={{ minHeight: 160, overflow: "hidden", resize: "none" }}
           value={importText}
           onChange={(e) => setImportText(e.currentTarget.value)}
           aria-label="Bản sao lưu để nhập"

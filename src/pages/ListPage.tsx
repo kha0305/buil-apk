@@ -32,6 +32,7 @@ type Props = {
   onTrashNotes: (notes: Note[]) => void;
   onReorder: (tagId: number, orderedIds: number[]) => void;
   onTagsChanged: () => void;
+  onRefresh: () => Promise<void>;
   onVisibleChange: (ids: number[]) => void;
   onToggleSelectMany: (ids: number[], select: boolean) => void;
   deletingIds: ReadonlySet<number>;
@@ -39,7 +40,9 @@ type Props = {
   selectedIds: ReadonlySet<number>;
   onToggleSelect: (note: Note) => void;
   onEnterSelectMode: () => void;
-  onExitSelectMode: () => void;
+  homeReset: number;
+  allSelected: boolean;
+  onToggleSelectAll: () => void;
 };
 
 type Group = {
@@ -219,6 +222,7 @@ export default function ListPage({
   onTrashNotes,
   onReorder,
   onTagsChanged,
+  onRefresh,
   onVisibleChange,
   onToggleSelectMany,
   deletingIds,
@@ -226,12 +230,24 @@ export default function ListPage({
   selectedIds,
   onToggleSelect,
   onEnterSelectMode,
-  onExitSelectMode,
+  homeReset,
+  allSelected,
+  onToggleSelectAll,
 }: Props) {
   const [dragUi, setDragUi] = useState<DragUi | null>(null);
   const [collapsed, setCollapsed] = useState<Record<number, boolean>>({});
   const [tagOrder, setTagOrder] = useState<string[]>([]);
   const [filterId, setFilterId] = useState<number | null>(null);
+  const homeResetFirstRef = useRef(true);
+
+  // Bấm tab Ghi chú khi đang ở trang chính: về lại "Tất cả" (bỏ lọc).
+  useEffect(() => {
+    if (homeResetFirstRef.current) {
+      homeResetFirstRef.current = false;
+      return;
+    }
+    setFilterId(null);
+  }, [homeReset]);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [editingTag, setEditingTag] = useState<RenameDraft | null>(null);
   const dragRef = useRef<DragState | null>(null);
@@ -243,8 +259,26 @@ export default function ListPage({
   const pillStartRef = useRef({ x: 0, y: 0, tagId: null as number | null });
   const suppressPillClickRef = useRef(false);
   const suppressClickUntilRef = useRef(0);
-  const cbRef = useRef({ onOpen, onAssignTags, onTrashNotes, onReorder });
-  cbRef.current = { onOpen, onAssignTags, onTrashNotes, onReorder };
+  // Kéo xuống làm mới (pull-to-refresh): chỉ khi đang ở đầu trang, chưa
+  // kéo note, chưa đang làm mới. Kéo đủ ngưỡng (~70px) rồi thả thì tải lại
+  // danh sách (ghi chú + tag). Chỉ báo xoay theo độ kéo qua ref (không
+  // render lại danh sách mỗi lần chạm di chuyển).
+  const PULL_THRESHOLD = 70;
+  const PULL_MAX = 90;
+  const [refreshing, setRefreshing] = useState(false);
+  const refreshingRef = useRef(false);
+  const pullRef = useRef<HTMLDivElement | null>(null);
+  const pullSpinRef = useRef<HTMLSpanElement | null>(null);
+  const pullStateRef = useRef({ startY: 0, active: false, ready: false });
+  const setPullHeight = (h: number) => {
+    const el = pullRef.current;
+    if (el) {
+      el.style.height = `${h}px`;
+      el.style.opacity = h > 4 ? "1" : "0";
+    }
+  };
+  const cbRef = useRef({ onOpen, onAssignTags, onTrashNotes, onReorder, onRefresh });
+  cbRef.current = { onOpen, onAssignTags, onTrashNotes, onReorder, onRefresh };
   // endDrag chạy từ listener đăng ký một lần nên đọc chế độ chọn qua ref,
   // không đọc state trực tiếp (closure cũ sẽ thấy giá trị cũ).
   const modeRef = useRef({ selectMode, selectedIds });
@@ -547,6 +581,77 @@ export default function ListPage({
     return () => window.removeEventListener("touchmove", block);
   }, [dragUi]);
 
+  // Kéo xuống làm mới (pull-to-refresh): vuốt xuống nhanh ở đầu trang thì
+  // tải lại danh sách. Kéo note cần nhấn giữ ~400ms mới nhấc lên, còn kéo
+  // làm mới là vuốt xuống ngay không giữ — hai cử chỉ không chạm nhau:
+  // đang kéo note thì bỏ qua, và vuốt đi >12px thì hẹn giờ nhấc note đã
+  // bị hủy bởi handler pointermove.
+  useEffect(() => {
+    const onTouchStart = (e: TouchEvent) => {
+      if (refreshingRef.current) return;
+      if (dragRef.current || dragUiRef.current) return;
+      if (window.scrollY > 0) return;
+      const t = e.touches[0];
+      if (!t) return;
+      pullStateRef.current = { startY: t.clientY, active: true, ready: false };
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      const p = pullStateRef.current;
+      if (!p.active) return;
+      if (dragRef.current || dragUiRef.current) {
+        pullStateRef.current = { startY: 0, active: false, ready: false };
+        setPullHeight(0);
+        return;
+      }
+      const t = e.touches[0];
+      if (!t) return;
+      const dy = t.clientY - p.startY;
+      if (dy <= 0) {
+        setPullHeight(0);
+        p.ready = false;
+        return;
+      }
+      // Đang kéo xuống ở đầu trang: chặn kéo làm mới mặc định của trình
+      // duyệt và hiện chỉ báo.
+      e.preventDefault();
+      const h = Math.min(dy, PULL_MAX);
+      setPullHeight(h);
+      if (pullSpinRef.current) pullSpinRef.current.style.transform = `rotate(${dy * 3}deg)`;
+      p.ready = dy >= PULL_THRESHOLD;
+    };
+    const onTouchEnd = () => {
+      const p = pullStateRef.current;
+      if (!p.active) return;
+      pullStateRef.current = { startY: 0, active: false, ready: false };
+      if (!p.ready) {
+        setPullHeight(0);
+        return;
+      }
+      refreshingRef.current = true;
+      setRefreshing(true);
+      setPullHeight(48);
+      if (pullSpinRef.current) pullSpinRef.current.style.transform = "";
+      void cbRef.current.onRefresh().finally(() => {
+        refreshingRef.current = false;
+        setRefreshing(false);
+        setPullHeight(0);
+        if (pullSpinRef.current) pullSpinRef.current.style.transform = "";
+      });
+    };
+    window.addEventListener("touchstart", onTouchStart, { passive: true });
+    window.addEventListener("touchmove", onTouchMove, { passive: false });
+    window.addEventListener("touchend", onTouchEnd);
+    window.addEventListener("touchcancel", onTouchEnd);
+    return () => {
+      window.removeEventListener("touchstart", onTouchStart);
+      window.removeEventListener("touchmove", onTouchMove);
+      window.removeEventListener("touchend", onTouchEnd);
+      window.removeEventListener("touchcancel", onTouchEnd);
+    };
+    // Listener đăng ký một lần, đọc mọi trạng thái qua ref.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const toggleGroup = (tagId: number) => {
     const next = { ...collapsed };
     if (next[tagId]) delete next[tagId];
@@ -636,11 +741,17 @@ export default function ListPage({
 
   return (
     <main className="page">
+      <div ref={pullRef} className="pull-refresh" aria-hidden="true">
+        <span
+          ref={pullSpinRef}
+          className={`pull-spinner${refreshing ? " spinning" : ""}`}
+        />
+      </div>
       {selectMode ? (
         <header className="toolbar">
           <h1>Đã chọn {selectedIds.size}</h1>
-          <button type="button" onClick={onExitSelectMode}>
-            Hủy
+          <button type="button" onClick={onToggleSelectAll}>
+            {allSelected ? "Bỏ chọn hết" : "Chọn tất cả"}
           </button>
         </header>
       ) : (
@@ -760,14 +871,13 @@ export default function ListPage({
                 data-tag-group={tag.id}
                 style={tints.get(tag.id)}
               >
-                <div className="group-head">
+                <div className="group-head" onClick={() => onPillClick(tag.id)}>
                   <button
                     type="button"
                     className="tag-pill"
                     style={tag.id === 0 ? undefined : { background: tagHex(tag.colour) }}
                     aria-expanded={!collapsed[tag.id]}
                     onPointerDown={(e) => onPillPointerDown(tag, e)}
-                    onClick={() => onPillClick(tag.id)}
                   >
                     <TagIcon id={tag.icon} size={14} />
                     {tag.name}
@@ -787,7 +897,10 @@ export default function ListPage({
                     <button
                       type="button"
                       className="icon-btn small"
-                      onClick={() => startRename(tag)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        startRename(tag);
+                      }}
                       aria-label={`Đổi tên tag ${tag.name}`}
                     >
                       {pencilIcon}
@@ -797,7 +910,10 @@ export default function ListPage({
                     <button
                       type="button"
                       className={`group-count count-btn${groupAllSelected ? " all" : ""}`}
-                      onClick={() => onToggleSelectMany(groupIds, !groupAllSelected)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleSelectMany(groupIds, !groupAllSelected);
+                      }}
                       aria-label={
                         groupAllSelected
                           ? `Bỏ chọn ${groupIds.length} ghi chú trong nhóm ${tag.name}`

@@ -174,6 +174,19 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
     content: contentRef.current?.value ?? "",
   });
 
+  // Ô nội dung tự giãn theo nội dung gõ (không cuộn trong ô).
+  const autoResizeContent = () => {
+    const el = contentRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
+  // Mở editor / đổi note: cho ô nội dung giãn đúng theo nội dung sẵn có.
+  useEffect(() => {
+    autoResizeContent();
+  }, [note.id]);
+
   const draftEmpty = (): boolean => {
     const d = readDraft();
     return (
@@ -422,7 +435,7 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
   ];
 
   return (
-    <main style={{ minHeight: "100dvh", padding: "12px 16px 118px", color: INK }}>
+    <main style={{ minHeight: "100dvh", display: "flex", flexDirection: "column", padding: "calc(env(safe-area-inset-top, 0px) + 12px) calc(env(safe-area-inset-right, 0px) + 16px) 118px calc(env(safe-area-inset-left, 0px) + 16px)", color: INK }}>
       <header
         style={{
           display: "flex",
@@ -439,8 +452,9 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
             border: "none",
             background: "transparent",
             color: INK,
-            fontSize: 16,
-            padding: "8px 4px",
+            fontSize: 18,
+            minHeight: 44,
+            padding: "10px 8px",
             cursor: "pointer",
           }}
         >
@@ -466,6 +480,9 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
 
       <div
         style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
           opacity: leaving ? 0 : 1,
           transform: leaving ? "scale(0.96)" : "scale(1)",
           transition: "opacity 220ms ease, transform 220ms ease",
@@ -507,6 +524,9 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
         </div>
         <div
           style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
             background: contentBg,
             borderRadius: 22,
             boxShadow: "0 2px 10px rgba(43, 38, 32, 0.12)",
@@ -519,9 +539,9 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
             placeholder="Viết ghi chú..."
             defaultValue={note.content}
             aria-label="Nội dung"
-            rows={6}
             onChange={(e) => {
               setWordCount(countWords(e.currentTarget.value));
+              autoResizeContent();
               scheduleSave();
             }}
             onCompositionStart={() => {
@@ -533,10 +553,12 @@ export default function EditorPage({ note, onClose, onSaved, onTagsChanged, onTr
             }}
             style={{
               width: "100%",
+              flex: 1,
               minHeight: 140,
               border: "none",
               outline: "none",
               resize: "none",
+              overflow: "hidden",
               background: "transparent",
               color: INK,
               fontSize: 16,

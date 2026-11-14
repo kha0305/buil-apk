@@ -35,6 +35,9 @@ export default function App() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>({ name: "list" });
+  // Bộ đếm: tăng mỗi lần bấm tab Ghi chú khi đang ở trang chính, để
+  // ListPage bỏ lọc (về "Tất cả").
+  const [homeReset, setHomeReset] = useState(0);
   const [selectMode, setSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<number>>(new Set());
   // Id note đang hiện trên màn hình chính (đã lọc chip + tìm kiếm):
@@ -161,9 +164,15 @@ export default function App() {
   };
 
   // Bấm mục trên thanh dưới: về danh sách (thoát chế độ chọn nếu đang
-  // chọn) hoặc mở màn thùng rác / sao lưu.
+  // chọn) hoặc mở màn thùng rác / sao lưu. Đang ở trang chính mà bấm lại
+  // tab Ghi chú thì làm mới danh sách (ghi chú + tag).
   const goNav = (target: NavView) => {
     if (target === "list") {
+      if (viewRef.current.name === "list") {
+        setHomeReset((c) => c + 1);
+        void reload(query);
+        return;
+      }
       exitSelectMode();
       setView({ name: "list" });
     } else if (target === "trash") {
@@ -341,6 +350,8 @@ export default function App() {
           onTrashNotes={(ns) => trashWithEffect(ns)}
           onReorder={(id, ids) => void reorder(id, ids)}
           onTagsChanged={() => void reload(query)}
+          onRefresh={() => reload(query)}
+          homeReset={homeReset}
           onVisibleChange={handleVisibleChange}
           onToggleSelectMany={toggleSelectMany}
           deletingIds={deletingIds}
@@ -348,7 +359,8 @@ export default function App() {
           selectedIds={selectedIds}
           onToggleSelect={toggleSelect}
           onEnterSelectMode={() => setSelectMode(true)}
-          onExitSelectMode={exitSelectMode}
+          allSelected={allSelected}
+          onToggleSelectAll={toggleSelectAll}
         />
       ) : view.name === "trash" ? (
         <TrashPage
@@ -356,10 +368,7 @@ export default function App() {
           onChanged={() => void reload(query)}
         />
       ) : view.name === "backup" ? (
-        <BackupPage
-          onClose={() => setView({ name: "list" })}
-          onChanged={() => void reload(query)}
-        />
+        <BackupPage onChanged={() => void reload(query)} />
       ) : (
         <EditorPage
           note={view.note}

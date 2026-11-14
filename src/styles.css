@@ -39,6 +39,39 @@ body {
     calc(env(safe-area-inset-left, 0px) + 16px);
 }
 
+/* Kéo xuống làm mới (pull-to-refresh): chỉ báo ở đầu danh sách, cao
+   theo độ kéo (ghi thẳng qua ref, không render lại danh sách). Lúc đang
+   làm mới thì spinner xoay liên tục. */
+.pull-refresh {
+  height: 0;
+  overflow: hidden;
+  opacity: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: opacity 150ms ease;
+}
+
+.pull-spinner {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2.5px solid rgb(179 38 30 / 0.2);
+  border-top-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.pull-spinner.spinning {
+  animation: pull-spin 0.8s linear infinite;
+}
+
+@keyframes pull-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -412,25 +445,6 @@ button.danger {
   box-shadow: 0 0 0 2px #fbe3e0;
 }
 
-/* Bảng màu note cuối (v18): 15 màu pastel nhạt theo thứ tự cầu vồng,
-   cộng kem (màu tag mặc định). Dùng cho thẻ note, ô màu tag, chấm màu. */
-.colour-red { background: #f9c8c8; }
-.colour-orange { background: #fbdcb8; }
-.colour-peach { background: #fbd3ae; }
-.colour-yellow { background: #fdf0b8; }
-.colour-green { background: #cbf0c8; }
-.colour-sage { background: #dce6c8; }
-.colour-mint { background: #cbf0e6; }
-.colour-sky { background: #bfe0f2; }
-.colour-blue { background: #c9dcf8; }
-.colour-purple { background: #e0cdf8; }
-.colour-lavender { background: #e6dcf7; }
-.colour-pink { background: #fbdfea; }
-.colour-brown { background: #e8dac8; }
-.colour-grey { background: #e6e6e6; }
-.colour-white { background: #fffdf7; border-color: #e6dcc8; }
-.colour-cream { background: #e8d3ae; }
-
 .note-list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
@@ -497,6 +511,27 @@ button.danger {
   transform: scale(0.85);
   box-shadow: none;
 }
+
+/* Bảng màu note cuối (v18): 15 màu pastel nhạt theo thứ tự cầu vồng,
+   cộng kem (màu tag mặc định). Dùng cho thẻ note, ô màu tag, chấm màu.
+   Đặt SAU .note-card (cùng độ đặc hiệu 0,1,0) để màu note thắng nền
+   trắng mặc định của thẻ; .note-card.drop-slot (0,2,0) vẫn thắng. */
+.colour-red { background: #f9c8c8; }
+.colour-orange { background: #fbdcb8; }
+.colour-peach { background: #fbd3ae; }
+.colour-yellow { background: #fdf0b8; }
+.colour-green { background: #cbf0c8; }
+.colour-sage { background: #dce6c8; }
+.colour-mint { background: #cbf0e6; }
+.colour-sky { background: #bfe0f2; }
+.colour-blue { background: #c9dcf8; }
+.colour-purple { background: #e0cdf8; }
+.colour-lavender { background: #e6dcf7; }
+.colour-pink { background: #fbdfea; }
+.colour-brown { background: #e8dac8; }
+.colour-grey { background: #e6e6e6; }
+.colour-white { background: #fffdf7; border-color: #e6dcc8; }
+.colour-cream { background: #e8d3ae; }
 
 .note-card h2 {
   margin: 0 0 4px;

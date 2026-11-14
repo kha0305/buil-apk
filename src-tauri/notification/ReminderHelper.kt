@@ -96,7 +96,10 @@ object ReminderHelper {
             )
             if (pending != null) alarm.cancel(pending)
             notificationManager(context).cancel(noteId.toInt())
-        } catch (e: Exception) {
+        } catch (e: Throwable) {
+            // Bắt cả Error (vd NoClassDefFoundError khi load
+            // ReminderReceiver): Error thoát ra JNI thành exception còn chờ
+            // rồi giết process — bắt ở đây để cancel luôn về êm.
             Log.w(TAG, "khong huy duoc nhac hen note $noteId", e)
         }
     }

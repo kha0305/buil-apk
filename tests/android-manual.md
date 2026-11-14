@@ -336,3 +336,68 @@ thiết kế bảng nhắc mới thay cho bảng cũ.)
     (kể cả lần mở đầu tiên sau khi cài). Màn chờ biến mất ngay khi danh
     sách hiện, không kẹt lại, không che mất danh sách. Tắt app hẳn rồi mở
     lại thì màn chờ vẫn hiện như vậy.
+
+## Sửa lỗi v18.1
+
+67. Màu thẻ ở trang chính: thẻ note vàng hiện đúng màu vàng nhạt (#fdf0b8),
+    thẻ tím hiện đúng màu tím nhạt (#e0cdf8); các màu khác cũng hiện đúng
+    màu đã chọn trong editor. Chấm màu ở nhóm thu gọn và thẻ ở màn Thùng
+    rác vẫn hiện đúng màu như trước.
+68. Đầu màn sửa không chui dưới thanh trạng thái: nút "Lưu" đỏ và nút
+    "Quay lại" nằm hẳn dưới thanh trạng thái, không bị icon pin/giờ đè
+    lên. Trang chính, Thùng rác, Sao lưu cũng không có màn nào chui dưới
+    thanh trạng thái.
+69. Dọn sạch thùng rác không làm app thoát: trong thùng rác có cả note có
+    nhắc hẹn lẫn note không có nhắc hẹn, bấm "Dọn sạch" rồi xác nhận thì
+    thùng rác trống hết, app vẫn ở màn Thùng rác (không tự thoát).
+    Nhắc hẹn của các note đã dọn cũng không còn kêu nữa.
+70. Nút "Khôi phục" không còn viền đậm: ở dạng danh sách, nút chữ
+    "Khôi phục" có viền nhạt; ở dạng lưới, nút tròn icon hoàn tác cũng
+    viền nhạt. Nút "Xóa hẳn" vẫn giữ viền đỏ như cũ.
+71. Ô nội dung màn sửa tự giãn: thẻ nội dung (thẻ màu) lấp đầy khoảng
+    trống còn lại của màn hình; gõ nhiều dòng thì ô tự cao thêm theo nội
+    dung, không cuộn trong ô. Thẻ tiêu đề trắng phía trên và menu dưới
+    giữ nguyên.
+72. Màu lưu trọn vòng: đổi màu một note trong màn sửa (vd màu hồng), về
+    trang chính thì ô của note đó hiện đúng màu hồng (#fbdfea).
+73. Kéo xuống để làm mới: ở đầu danh sách, kéo xuống thì hiện vòng xoay
+    làm mới rồi danh sách tải lại. Kéo-thả sắp xếp note vẫn như cũ (nhấn
+    giữ ~400ms mới nhấc note lên; vuốt nhanh không nhấn giữ thì không
+    nhấc).
+74. Bấm tab Ghi chú để làm mới: đang ở trang chính, bấm lại tab "Ghi chú"
+    ở thanh dưới thì danh sách tải lại (ghi chú + tag).
+75. Bấm tab Ghi chú thì bỏ lọc: đang lọc một chip (vd "Chưa gắn tag"),
+    bấm tab "Ghi chú" thì chip trở về "Tất cả" và hiện đủ các nhóm.
+76. Bấm bất cứ đâu trên đầu nhóm cũng thu/mở: nhóm đang thu gọn, bấm vào
+    chấm màu, vào số "N note" hay vào khoảng trống trên thanh đầu nhóm
+    thì nhóm mở ra (và ngược lại khi nhóm đang mở). Bấm nút bút chì đổi
+    tên tag, hay nút số note ở chế độ chọn, thì không thu/mở nhóm.
+    Nhấn giữ tên tag vẫn mở đổi tên như cũ.
+77. Ô nhập bản sao lưu rộng sẵn: mở màn Sao lưu, ô nhập đã hiện trọn bản
+    JSON mẫu (~40 dòng), không phải cuộn trong ô hay kéo tay. Gõ hoặc
+    dán bản dài hơn thì ô tự cao thêm. Ô xuất (hiện JSON sau khi xuất)
+    và các nút giữ nguyên.
+78. Màn Sao lưu không còn nút back "‹": đầu màn chỉ còn tiêu đề "Sao lưu".
+    Về trang chính bằng tab "Ghi chú" ở thanh dưới hoặc nút back hệ
+    thống Android. Màn Thùng rác vẫn còn nút back, màn sửa vẫn còn nút
+    "Quay lại".
+79. Đầu màn chính khi đang chọn không còn nút "Hủy" nữa: thay vào đó là
+    nút "Chọn tất cả" (chọn hết các ghi chú đang hiển thị theo lọc + tìm
+    kiếm; khi đã chọn hết thì thành "Bỏ chọn hết"), cùng hành vi với nút
+    "Chọn tất cả" ở menu dưới. Thoát chế độ chọn bằng nút ✕ tròn ở giữa
+    menu dưới hoặc nút back hệ thống Android.
+80. Menu chọn ở Thùng rác giữ nguyên nút tròn ✕ ở giữa như gốc v18: khi
+    đang chọn nhiều trong Thùng rác, menu dưới là [Khôi phục nhanh]
+    [nút tròn ✕ kem ở giữa] [Xóa hẳn]. Nút ✕ ở giữa bấm là thoát chế độ
+    chọn (không còn là nút "Chọn tất cả"). Thoát chế độ chọn bằng nút ✕
+    ở giữa, nút back "‹" ở đầu màn, hoặc nút back hệ thống Android.
+    [Khôi phục nhanh] và [Xóa hẳn] giữ nguyên.
+81. Nút back "‹" ở đầu màn Thùng rác to hơn: vùng bấm tối thiểu 44x44px,
+    dấu "‹" lớn hơn, bấm dễ hơn. Nút "‹ Quay lại" ở đầu màn sửa cũng cao
+    hơn (tối thiểu 44px, chữ lớn hơn) cho đều; hành vi của nó không đổi.
+82. Nút "Chọn tất cả" ở đầu màn Thùng rác (bên cạnh nút chuyển chế độ
+    xem): chỉ hiện khi đang ở chế độ chọn (đầu màn hiện "Đã chọn N").
+    Bấm là chọn hết các ghi chú đang hiện trong Thùng rác; khi đã chọn
+    hết thì nút thành "Bỏ chọn hết" (bấm là bỏ chọn hết) — giống hệt
+    nút "Chọn tất cả"/"Bỏ chọn hết" ở đầu màn chính. Ở chế độ thường
+    (chưa chọn) thì nút này không hiện.
