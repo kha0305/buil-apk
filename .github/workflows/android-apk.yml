@@ -70,25 +70,35 @@ jobs:
             npx tauri android init
           fi
 
-      # Build bản debug (đã ký bằng debug key, cài được lên điện thoại ngay).
-      # Bản release của Tauri 2.12 ra file *-unsigned.apk (chưa ký, không cài
-      # được) — workflow lần đầu 14/11/2026 chết ở bước đổi tên vì tìm sai tên
-      # file app-universal-release.apk trong khi file thật là
-      # app-universal-release-unsigned.apk (xem log job 132411264033, dòng
-      # "Finished 1 APK at: .../app-universal-release-unsigned.apk").
-      # Muốn bản release ký thật thì cần keystore riêng, làm sau khi test xong.
+      # Ký bản release bằng keystore cố định (kha tạo 14/11/2026, giữ file
+      # .keystore + mật khẩu cẩn thận — mất là không cập nhật đè app được nữa).
+      # Keystore nằm trong GitHub Secrets, KHÔNG commit vào repo.
+      # Cách ký theo mẫu Blinko + tài liệu Tauri: giải mã keystore vào
+      # src-tauri/gen/android/keystore.jks rồi ghi keystore.properties
+      # (storeFile/storePassword/keyAlias/keyPassword) để Gradle ký bản release.
+      # Bản debug trước đây ký bằng key debug dùng 1 lần trên máy ảo GitHub
+      # nên không cập nhật đè được — từ bản release này trở đi, mọi bản sau
+      # ký cùng 1 key nên cài đè thoải mái, note còn nguyên.
+      - name: Giải mã keystore ký release
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > src-tauri/gen/android/keystore.jks
+          cat > src-tauri/gen/android/keystore.properties <<EOF
+          storeFile=keystore.jks
+          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
+          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
+          EOF
+
       - name: Build APK
-        run: npx tauri android build --apk --debug
+        run: npx tauri android build --apk
         env:
           NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/26.0.10792818
 
       - name: Đổi tên APK universal
-        run: |
-          cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk \
-             ghi-chu-0.1.0-debug.apk
+        run: cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk ghi-chu-0.1.0-release.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ghi-chu-apk
-          path: ghi-chu-0.1.0-debug.apk
+          path: ghi-chu-0.1.0-release.apk
