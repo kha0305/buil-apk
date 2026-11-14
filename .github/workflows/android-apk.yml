@@ -78,10 +78,8 @@ jobs:
       - name: Đổi tên APK universal
         run: |
           cp src-tauri/gen/android/app/build/outputs/apk/universal/debug/app-universal-debug.apk ghi-chu-0.1.0-debug.apk
-             ghi-chu-0.1.0-universal.apk
-
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: ghi-chu-apk
-          path: ghi-chu-0.1.0-universal.apk
+          path: ghi-chu-0.1.0-debug.apk
