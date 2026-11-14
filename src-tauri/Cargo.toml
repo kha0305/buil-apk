@@ -1,0 +1,40 @@
+[package]
+name = "ghi-chu"
+version = "0.1.0"
+description = "App ghi chú offline, Tauri Mobile 2.12 + React + SQLite"
+authors = ["Cao Nguyễn Bảo Kha"]
+edition = "2024"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "ghi_chu_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+# Pin qua GitHub Releases tauri-apps/tauri: 2.12.5 mới nhất (21/10/2026),
+# changelog chính thức còn dừng ở 2.12.3 nên đừng lấy 2.12.3.
+# Lưu ý: tauri-build KHÔNG có bản 2.12.x — crates.io chốt 2.x ở 2.7.4,
+# hai crate này lệch số version từ sau 2.7, pin theo từng crate.
+tauri-build = { version = "=2.7.4", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.5", features = [] }
+rusqlite = { version = "0.41", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+tempfile = "3"
+
+
+# Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = 3
+panic = "abort"
+strip = true

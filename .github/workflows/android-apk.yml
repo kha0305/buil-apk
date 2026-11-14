@@ -1,0 +1,87 @@
+# Build APK Android cho app Ghi chú (Tauri Mobile 2.12)
+#
+# Lấy mẫu từ 3 repo đã thử thật (xem docs/reused-workflows.md):
+# - EasyTier (.github/workflows/mobile.yml): setup-android@v3 + NDK 26 + 4 target
+#   Rust Android + `tauri android build --apk --split-per-abi`, APK ở
+#   src-tauri/gen/android/app/build/outputs/apk/*/release/*.apk
+# - Blinko (.github/workflows/app-release.yml): ký release bằng keystore giải mã
+#   từ secret, versionCode = major*1_000_000 + minor*1_000 + patch
+# - kha0305/buil-apk (.github/workflows/build-apk.yml, Capacitor): chỉ tham khảo
+#   cấu trúc chung (Node 22, Java 21, upload artifact); các bước cap add/sync,
+#   APK debug KHÔNG dùng cho Tauri.
+#
+# Không copy code nghiệp vụ của repo nào. Chưa chạy thật trên GitHub Actions —
+# cần kha push repo lên GitHub rồi bấm Run workflow để kiểm chứng.
+name: Build APK Android
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "src-tauri/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/android-apk.yml"
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cài Node 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cài Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Cài Android SDK + NDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 11076708
+          packages: "build-tools;34.0.0 platform-tools platforms;android-34 ndk;26.0.10792818"
+
+      - name: Cài Rust + 4 target Android
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cài dependencies
+        run: npm ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Khởi tạo Android (lần đầu)
+        run: |
+          if [ ! -d src-tauri/gen/android ]; then
+            npx tauri android init
+          fi
+
+      - name: Build APK
+        run: npx tauri android build --apk
+        env:
+          NDK_HOME: ${{ env.ANDROID_HOME }}/ndk/26.0.10792818
+
+      - name: Đổi tên APK universal
+        run: |
+          cp src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk \
+             ghi-chu-0.1.0-universal.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: ghi-chu-apk
+          path: ghi-chu-0.1.0-universal.apk
