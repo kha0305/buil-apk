@@ -14,8 +14,10 @@ Chạy sau khi có APK từ `docs/android-build.md`.
 
 ## Tag và kéo thả (thêm ở bản v2)
 
-9. Trong editor, ô tag: gõ "Học" rồi Enter thì chip Học hiện; gõ lại "học"
+9. Trong editor, ô tag: gõ "Học" rồi bấm nút Thêm thì chip Học hiện; gõ lại "học"
    thì không tạo tag trùng; thoát editor rồi mở lại vẫn đủ tag.
+   (Bấm Enter mà đang gõ Telex thì phím Enter bị bàn phím nuốt để chốt âm tiết
+   nên tag không thêm được — đó là lỗi bản v2, nút Thêm mới thay cho Enter.)
 10. Nhóm tag: note có tag Học và Thi hiện ở cả hai nhóm; note không có tag
     nằm ở nhóm Chưa gắn tag.
 11. Kéo thả bằng tay: nhấn giữ một note khoảng nửa giây thì note nhấc lên
@@ -25,3 +27,9 @@ Chạy sau khi có APK từ `docs/android-build.md`.
 12. Kéo một note vào nhóm Chưa gắn tag thì gỡ hết tag của note đó.
 13. Đóng app hẳn, mở lại: tag và nhóm vẫn còn (migration v2 không mất
     dữ liệu cũ).
+14. Gõ tag bằng Gboard Telex trong một note mới tạo: gõ xong bấm nút Thêm
+    (không bấm Enter), chip tag hiện ngay; thoát editor rồi mở lại, note
+    nằm đúng nhóm tag đó.
+15. Thêm tag trong editor rồi bấm Quay lại ngay: danh sách hiện nhóm tag mới
+    và số lượng đúng luôn, không cần tắt mở lại app (bản cũ nhóm mới chỉ
+    hiện sau khi mở lại app vì danh sách không tải lại tag).

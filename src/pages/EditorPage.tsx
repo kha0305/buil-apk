@@ -6,11 +6,12 @@ type Props = {
   note: Note;
   onClose: () => void;
   onSaved: (note: Note) => void;
+  onTagsChanged: () => void;
 };
 
 // Ô nhập dùng <textarea> uncontrolled + guard composition: đang gõ Telex/VNI
 // thì không autosave, không ghi đè value, chỉ lưu sau khi composition kết thúc.
-export default function EditorPage({ note, onClose, onSaved }: Props) {
+export default function EditorPage({ note, onClose, onSaved, onTagsChanged }: Props) {
   const titleRef = useRef<HTMLInputElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
   const composingRef = useRef(false);
@@ -73,6 +74,7 @@ export default function EditorPage({ note, onClose, onSaved }: Props) {
       setTags(saved.tags);
       setTagError("");
       onSaved(saved);
+      onTagsChanged();
       return true;
     } catch (e) {
       setTagError(e instanceof Error ? e.message : String(e));

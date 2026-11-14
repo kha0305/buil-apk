@@ -93,6 +93,18 @@ export default function App() {
     if (viewRef.current.name === "editor") setView({ name: "editor", note: saved });
   };
 
+  // Nhóm tag trên danh sách vẽ từ state `tags`, còn `onSaved` ở editor chỉ
+  // cập nhật `notes` nên tag mới tạo không hiện nhóm cho tới khi mở lại app.
+  // Editor gọi riêng hàm này mỗi lần thêm/gỡ tag xong (autosave gõ chữ thì
+  // không gọi, đỡ đọc DB thừa mỗi 800ms).
+  const reloadTags = useCallback(async () => {
+    try {
+      setTags(await listTags());
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
   // Kéo note vào nhóm tag: tag là tên nhóm, null là nhóm Chưa gắn tag (gỡ hết).
   const assignTag = async (note: Note, tag: string | null) => {
     try {
@@ -100,7 +112,7 @@ export default function App() {
       if (tag !== null && next.length === note.tags.length) return;
       const saved = await setNoteTags(note.id, next);
       onSaved(saved);
-      setTags(await listTags());
+      await reloadTags();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     }
@@ -128,6 +140,7 @@ export default function App() {
           note={view.note}
           onClose={() => setView({ name: "list" })}
           onSaved={onSaved}
+          onTagsChanged={() => void reloadTags()}
         />
       )}
     </>
