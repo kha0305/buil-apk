@@ -17,9 +17,9 @@ from pathlib import Path
 GRADLE = Path("src-tauri/gen/android/app/build.gradle.kts")
 
 LOAD_BLOCK = """val keystorePropertiesFile = rootProject.file("keystore.properties")
-val keystoreProperties = java.util.Properties()
+val keystoreProperties = Properties()
 if (keystorePropertiesFile.exists()) {
-    keystoreProperties.load(java.io.FileInputStream(keystorePropertiesFile))
+    keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 """
 
@@ -46,6 +46,14 @@ def main() -> int:
         return 0
 
     lines = text.splitlines(keepends=True)
+
+    # 0. Import dung kieu tai lieu Tauri (khong dung ten day du java.util.* /
+    #    java.io.* vi trong Gradle Kotlin DSL `java` bi hieu nham thanh
+    #    extension cua plugin java -> loi "Unresolved reference 'util'/'io'"
+    #    o lan chay #7, run c9a5985a, 14/11/2026).
+    imports = "import java.io.FileInputStream\nimport java.util.Properties\n"
+    if "import java.io.FileInputStream" not in text:
+        lines[0:0] = [imports + "\n"]
 
     # 1. Nap keystore.properties truoc khoi android { ... }.
     android_idx = next(i for i, l in enumerate(lines) if re.match(r"^android\s*\{", l))
