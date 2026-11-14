@@ -23,6 +23,7 @@ on:
       - "src-tauri/**"
       - "package.json"
       - "package-lock.json"
+      - "scripts/**"
       - ".github/workflows/android-apk.yml"
 
 jobs:
@@ -82,18 +83,30 @@ jobs:
       # chết đúng lỗi như lần chạy #1. Phải chạy thêm script
       # scripts/patch-android-signing.py (bước ngay dưới) để chèn khối
       # signingConfigs + signingConfig vào build.gradle.kts thì Gradle mới ký.
-      # storeFile ghi đường dẫn tuyệt đối để Gradle không đoán sai thư mục.
+      # Secrets doc qua env (khong chen thang vao lenh): mat khau co ky tu $ ` !
+      # se khong bi bash hieu nham (heredoc <<EOF khong co ngoac don o ban truoc
+      # se lam bien dang mat khau dang do), va `keytool -list` kiem tra ngay
+      # keystore co mo duoc khong thay vi doi toi buoc build moi chet kho hieu.
       - name: Giải mã keystore ký release
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASS: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > src-tauri/gen/android/keystore.jks
-          cat > src-tauri/gen/android/keystore.properties <<EOF
-          storeFile=$GITHUB_WORKSPACE/src-tauri/gen/android/keystore.jks
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
+          printf '%s' "$KEYSTORE_B64" | base64 -d > src-tauri/gen/android/keystore.jks
+          test -s src-tauri/gen/android/keystore.jks || { echo "Keystore giai ma ra file rong — kiem tra lai secret ANDROID_KEYSTORE_BASE64"; exit 1; }
+          keytool -list -keystore src-tauri/gen/android/keystore.jks -storepass "$KEYSTORE_PASS" -alias "$KEY_ALIAS" >/dev/null || { echo "Khong mo duoc keystore — sai mat khau kho hoac sai alias, kiem tra lai secrets"; exit 1; }
+          {
+            echo "storeFile=$GITHUB_WORKSPACE/src-tauri/gen/android/keystore.jks"
+            echo "storePassword=$KEYSTORE_PASS"
+            echo "keyAlias=$KEY_ALIAS"
+            echo "keyPassword=$KEY_PASS"
+          } > src-tauri/gen/android/keystore.properties
 
       - name: Bật ký release trong Gradle
+        env:
+          TAURI_VERSION_CODE: ${{ github.run_number }}
         run: python3 scripts/patch-android-signing.py
 
       - name: Build APK
