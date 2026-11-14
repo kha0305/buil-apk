@@ -123,6 +123,16 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             PRAGMA user_version = 2;",
         )?;
     }
+    // Migration v3: cài đặt nhỏ dạng key/value (vd nhóm tag đang thu gọn).
+    if conn.query_row("PRAGMA user_version", [], |r| r.get::<_, i64>(0))? < 3 {
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS settings (
+                key   TEXT PRIMARY KEY,
+                value TEXT NOT NULL DEFAULT ''
+            );
+            PRAGMA user_version = 3;",
+        )?;
+    }
     Ok(())
 }
 

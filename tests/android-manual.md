@@ -37,3 +37,10 @@ Chạy sau khi có APK từ `docs/android-build.md`.
     là một ô vuông; tiêu đề dài cắt còn 2 dòng, nội dung dài cắt còn 4 dòng
     rồi "...", chip tag dồn xuống đáy ô. Kéo thả note vào nhóm tag vẫn làm
     được như cũ (nhấn giữ rồi kéo, nhóm sáng lên khi kéo tới).
+17. Thu gọn nhóm tag rồi mở một note, quay lại danh sách: nhóm vẫn thu gọn
+    như cũ (không mở hết lại). Tắt app hẳn, mở lại: trạng thái thu gọn/mở
+    của từng nhóm vẫn giữ nguyên (lưu trong DB, migration v3).
+18. Mở editor: dãy chấm màu có 10 màu (vàng, xanh lá, xanh dương, hồng, tím,
+    cam, đỏ san hô, xanh mint, nâu giấy, xám) xếp 2 hàng, không tràn màn hình.
+    Chọn từng màu mới: thẻ note đổi màu nền + viền trái đúng màu, note cũ giữ
+    nguyên màu cũ.

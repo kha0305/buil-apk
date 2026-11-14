@@ -163,6 +163,7 @@ button.danger {
 
 .colours {
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
   margin: 12px 0;
 }
@@ -184,11 +185,21 @@ button.danger {
 .colour-blue { background: #a9c6f5; }
 .colour-pink { background: #f5b8c8; }
 .colour-purple { background: #d3b8f5; }
+.colour-orange { background: #f9c489; }
+.colour-red { background: #f5a3a3; }
+.colour-mint { background: #a8e6d5; }
+.colour-brown { background: #d9c1a3; }
+.colour-grey { background: #d5d5d5; }
 
 .note-card.colour-green { border-left-color: #5da85a; }
 .note-card.colour-blue { border-left-color: #4a7dd4; }
 .note-card.colour-pink { border-left-color: #d4628a; }
 .note-card.colour-purple { border-left-color: #8a5fd4; }
+.note-card.colour-orange { border-left-color: #d4862e; }
+.note-card.colour-red { border-left-color: #cf5a5a; }
+.note-card.colour-mint { border-left-color: #4ea88f; }
+.note-card.colour-brown { border-left-color: #a0855f; }
+.note-card.colour-grey { border-left-color: #8a8a8a; }
 
 .title-input {
   font-size: 18px;

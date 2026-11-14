@@ -13,3 +13,6 @@ export const togglePin = (id: number) => invoke<Note>("toggle_pin", { id });
 export const listTags = () => invoke<Tag[]>("list_tags");
 export const setNoteTags = (id: number, tags: string[]) =>
   invoke<Note>("set_note_tags", { id, tags });
+export const getSetting = (key: string) => invoke<string | null>("get_setting", { key });
+export const setSetting = (key: string, value: string) =>
+  invoke<void>("set_setting", { key, value });

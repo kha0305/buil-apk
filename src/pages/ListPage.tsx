@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import type { Note, Tag } from "../lib/types";
+import { getSetting, setSetting } from "../services/notesApi";
 import NoteCard from "../components/NoteCard";
 
 type Props = {
@@ -128,8 +129,30 @@ export default function ListPage({ notes, tags, query, onQuery, onOpen, onToggle
     return () => window.removeEventListener("touchmove", block);
   }, [drag]);
 
-  const toggleGroup = (name: string) =>
-    setCollapsed((prev) => ({ ...prev, [name]: !prev[name] }));
+  const toggleGroup = (name: string) => {
+    const next = { ...collapsed };
+    if (next[name]) delete next[name];
+    else next[name] = true;
+    setCollapsed(next);
+    // Ghi xuống DB ngay để tắt app mở lại vẫn giữ trạng thái nhóm.
+    void setSetting("collapsed_groups", JSON.stringify(Object.keys(next))).catch(() => undefined);
+  };
+
+  // Nhóm nào đang thu gọn được lưu trong DB (ListPage unmount mỗi lần mở
+  // editor nên state trong bộ nhớ không giữ được qua lần mở note).
+  useEffect(() => {
+    getSetting("collapsed_groups")
+      .then((v) => {
+        if (!v) return;
+        try {
+          const names = JSON.parse(v) as string[];
+          setCollapsed(Object.fromEntries(names.map((n) => [n, true])));
+        } catch {
+          // Giá trị cũ hỏng thì bỏ qua, mặc định mở hết nhóm.
+        }
+      })
+      .catch(() => undefined);
+  }, []);
 
   return (
     <main className="page list-page">

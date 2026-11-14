@@ -181,7 +181,7 @@ mod tests {
         let version: i64 = conn
             .query_row("PRAGMA user_version", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(version, 2, "migration tag phải nâng user_version lên 2");
+        assert_eq!(version, 3, "migration phải nâng user_version lên bản mới nhất (3)");
         let state = DbState { db: Mutex::new(conn) };
         let all = list_notes(&state).unwrap();
         assert_eq!(all.len(), 1);

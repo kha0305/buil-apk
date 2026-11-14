@@ -128,3 +128,10 @@ nút Back, safe-area, gõ Gboard tiếng Việt trong ô tag, hiệu năng danh 
 - Chạy workflow GitHub Actions thật (cần push repo lên GitHub).
 
 Kế hoạch test tay trên điện thoại: xem `tests/android-manual.md`.
+
+## Lưu trạng thái thu gọn nhóm tag (migration v3)
+- Bảng `settings(key, value)` + 2 lệnh Rust `get_setting`/`set_setting`; nhóm nào
+  đang thu gọn lưu dưới key `collapsed_groups` (JSON mảng tên nhóm).
+- ListPage đọc lúc mở app, ghi ngay mỗi lần bấm thu gọn/mở nhóm — mở note rồi
+  quay lại hay tắt app mở lại đều giữ nguyên. DB cũ tự nâng lên v3, note/tag còn nguyên.
+- `cargo test`: 18 passed (15 cũ + 3 mới cho settings), `npm run build` đậu.

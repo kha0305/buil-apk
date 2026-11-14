@@ -21,4 +21,15 @@ export type NewNote = {
   pinned: boolean;
 };
 
-export const COLOURS = ["yellow", "green", "blue", "pink", "purple"] as const;
+export const COLOURS = [
+  "yellow",
+  "green",
+  "blue",
+  "pink",
+  "purple",
+  "orange",
+  "red",
+  "mint",
+  "brown",
+  "grey",
+] as const;
