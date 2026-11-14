@@ -18,6 +18,7 @@ export default function EditorPage({ note, onClose, onSaved }: Props) {
   const [colour, setColour] = useState(note.colour);
   const [tags, setTags] = useState<string[]>(note.tags);
   const [tagInput, setTagInput] = useState("");
+  const [tagError, setTagError] = useState("");
 
   // Mở note khác thì đồng bộ lại tag (cùng editor, khác id).
   useEffect(() => {
@@ -64,20 +65,28 @@ export default function EditorPage({ note, onClose, onSaved }: Props) {
   };
 
   // Tag lưu ngay khi thêm/gỡ (lấy kết quả từ Rust làm chuẩn, không đoán).
+  // Lưu lỗi thì báo chữ và giữ nguyên chữ đã gõ (không xóa ô nhập trước khi
+  // lưu xong như bản cũ — lỗi là mất luôn tag vừa gõ mà không ai biết).
   const saveTags = async (next: string[]) => {
-    const saved = await setNoteTags(note.id, next);
-    setTags(saved.tags);
-    onSaved(saved);
+    try {
+      const saved = await setNoteTags(note.id, next);
+      setTags(saved.tags);
+      setTagError("");
+      onSaved(saved);
+      return true;
+    } catch (e) {
+      setTagError(e instanceof Error ? e.message : String(e));
+      return false;
+    }
   };
 
-  const addTag = () => {
+  const addTag = async () => {
     const name = tagInput.trim();
     if (!name || tags.some((t) => t.toLowerCase() === name.toLowerCase())) {
       setTagInput("");
       return;
     }
-    setTagInput("");
-    void saveTags([...tags, name]);
+    if (await saveTags([...tags, name])) setTagInput("");
   };
 
   const removeTag = (name: string) => {
@@ -130,19 +139,25 @@ export default function EditorPage({ note, onClose, onSaved }: Props) {
             </span>
           ))}
         </div>
-        <input
-          className="tag-input"
-          type="text"
-          placeholder="Thêm tag rồi bấm Enter..."
-          value={tagInput}
-          onChange={(e) => setTagInput(e.currentTarget.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-              e.preventDefault();
-              addTag();
-            }
-          }}
-        />
+        <div className="tag-input-row">
+          <input
+            className="tag-input"
+            type="text"
+            placeholder="Thêm tag..."
+            value={tagInput}
+            onChange={(e) => setTagInput(e.currentTarget.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+                e.preventDefault();
+                void addTag();
+              }
+            }}
+          />
+          <button type="button" className="tag-add" onClick={() => void addTag()}>
+            Thêm
+          </button>
+        </div>
+        {tagError ? <p className="error tag-error">{tagError}</p> : null}
       </div>
       <textarea
         ref={contentRef}
