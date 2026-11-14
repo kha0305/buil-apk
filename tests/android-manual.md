@@ -33,3 +33,7 @@ Chạy sau khi có APK từ `docs/android-build.md`.
 15. Thêm tag trong editor rồi bấm Quay lại ngay: danh sách hiện nhóm tag mới
     và số lượng đúng luôn, không cần tắt mở lại app (bản cũ nhóm mới chỉ
     hiện sau khi mở lại app vì danh sách không tải lại tag).
+16. Thẻ note hình vuông: danh sách xếp lưới 2 cột trên điện thoại, mỗi thẻ
+    là một ô vuông; tiêu đề dài cắt còn 2 dòng, nội dung dài cắt còn 4 dòng
+    rồi "...", chip tag dồn xuống đáy ô. Kéo thả note vào nhóm tag vẫn làm
+    được như cũ (nhấn giữ rồi kéo, nhóm sáng lên khi kéo tới).

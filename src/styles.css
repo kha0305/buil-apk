@@ -87,8 +87,8 @@ button.danger {
 }
 
 .note-list {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 10px;
 }
 
@@ -100,6 +100,11 @@ button.danger {
   border-radius: 12px;
   padding: 12px 14px;
   cursor: pointer;
+  /* Ô vuông: cao bằng rộng, chữ dài tự cắt, tag dồn xuống đáy. */
+  aspect-ratio: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   /* Tay cuộn dọc bình thường; khi đã nhấc note lên thì JS chặn cuộn. */
   touch-action: pan-y;
   -webkit-user-select: none;
@@ -114,6 +119,10 @@ button.danger {
 .note-card h2 {
   margin: 0 0 4px;
   font-size: 16px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .note-card p {
@@ -122,12 +131,23 @@ button.danger {
   font-size: 14px;
   white-space: pre-wrap;
   word-break: break-word;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-card .tag-chips {
+  margin-top: auto;
+  padding-top: 8px;
 }
 
 .pin-btn {
-  float: right;
+  align-self: flex-end;
+  flex-shrink: 0;
   font-size: 12px;
   padding: 4px 8px;
+  margin-bottom: 6px;
 }
 
 .empty {

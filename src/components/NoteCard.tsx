@@ -11,7 +11,7 @@ type Props = {
 
 export default function NoteCard({ note, onOpen, onTogglePin, onPointerDown, dragging }: Props) {
   const title = note.title.trim() || "Ghi chú mới";
-  const preview = note.content.trim().slice(0, 80);
+  const preview = note.content.trim();
   return (
     <article
       className={`note-card colour-${note.colour}${dragging ? " dragging" : ""}`}
